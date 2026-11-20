@@ -192,3 +192,22 @@ def test_parse_deepgram_response() -> None:
     assert [word.text for word in transcript.words] == ["Hello", "world"]
     assert transcript.segments[0].text == "Hello world"
     assert transcript.duration == 1.2
+
+
+def test_load_pcm16_wav_roundtrip(tmp_path: Path) -> None:
+    import struct
+    import wave
+
+    from snipzo.transcribe.faster_whisper import load_pcm16_wav
+
+    path = tmp_path / "tone.wav"
+    samples = [0, 16384, 0, -16384, 0]
+    with wave.open(str(path), "wb") as handle:
+        handle.setnchannels(1)
+        handle.setsampwidth(2)
+        handle.setframerate(16000)
+        handle.writeframes(b"".join(struct.pack("<h", value) for value in samples))
+    audio = load_pcm16_wav(path)
+    assert len(audio) == 5
+    assert abs(float(audio[1]) - 0.5) < 0.01
+

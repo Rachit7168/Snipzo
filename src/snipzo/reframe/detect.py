@@ -96,7 +96,9 @@ class OpenCVHaarFaceDetector:
     def __init__(self) -> None:
         import cv2
 
-        path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+        data = getattr(cv2, "data", None)
+        base = getattr(data, "haarcascades", "") if data is not None else ""
+        path = str(base) + "haarcascade_frontalface_default.xml"
         cascade = cv2.CascadeClassifier(path)
         if cascade.empty():
             raise RuntimeError(f"Could not load Haar cascade from {path}")

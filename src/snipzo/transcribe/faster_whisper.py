@@ -12,7 +12,7 @@ from snipzo.models import Segment, Transcript, Word
 class _WhisperModel(Protocol):
     def transcribe(
         self,
-        audio: str,
+        audio: str | object,
         word_timestamps: bool = False,
         vad_filter: bool = False,
     ) -> tuple[Any, Any]: ...
@@ -28,8 +28,9 @@ class FasterWhisperTranscriber:
 
     def transcribe(self, audio_path: Path) -> Transcript:
         model = self._load()
+        audio = load_pcm16_wav(audio_path)
         segments_iter, info = model.transcribe(
-            str(audio_path),
+            audio,
             word_timestamps=True,
             vad_filter=True,
         )
@@ -118,3 +119,27 @@ def _optional_float(value: object) -> float | None:
         return float(str(value))
     except (TypeError, ValueError):
         return None
+
+
+def load_pcm16_wav(path: Path) -> object:
+    """Load a PCM WAV as float32 samples so we do not depend on PyAV."""
+    import wave
+
+    import numpy as np
+
+    try:
+        with wave.open(str(path), "rb") as handle:
+            channels = handle.getnchannels()
+            sample_width = handle.getsampwidth()
+            frames = handle.readframes(handle.getnframes())
+    except wave.Error as exc:
+        raise SnipzoError(f"Could not read WAV audio: {path}") from exc
+    if sample_width != 2:
+        raise SnipzoError(
+            f"Expected 16-bit PCM audio, got {sample_width * 8}-bit: {path}"
+        )
+    audio = np.frombuffer(frames, dtype="<i2").astype(np.float32) / 32768.0
+    if channels > 1:
+        audio = audio.reshape(-1, channels).mean(axis=1)
+    return audio
+
