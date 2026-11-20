@@ -15,5 +15,14 @@ def test_version() -> None:
 def test_help_lists_pipeline_commands() -> None:
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
-    for command in ("ingest", "transcribe", "pick", "reframe", "render", "metadata"):
+    for command in (
+        "ingest",
+        "transcribe",
+        "pick",
+        "reframe",
+        "render",
+        "metadata",
+        "run",
+        "eval",
+    ):
         assert command in result.stdout
