@@ -63,6 +63,12 @@ Pick highlight clips from the transcript (Claude when `SNIPZO_ANTHROPIC_API_KEY`
 snipzo pick PROJECT_ID --work-dir ./data
 ```
 
+Compute a 9:16 crop path for each clip (face tracking when MediaPipe or OpenCV is available, otherwise a center crop; blurred-background fallback when no face is found):
+
+```bash
+snipzo reframe PROJECT_ID --work-dir ./data
+```
+
 
 Run the quality checks (the same ones CI runs on `dev` and `main`):
 

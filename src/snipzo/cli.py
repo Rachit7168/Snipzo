@@ -151,9 +151,32 @@ def pick(
 
 
 @app.command()
-def reframe() -> None:
+def reframe(
+    project: Annotated[
+        str,
+        typer.Argument(help="Project ID or path to a project directory."),
+    ],
+    work_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--work-dir",
+            help="Project working directory (defaults to SNIPZO_WORK_DIR or ./data).",
+        ),
+    ] = None,
+) -> None:
     """Compute a 9:16 crop path for each selected clip."""
-    _not_implemented(5)
+    from snipzo.reframe import reframe_project
+
+    try:
+        updated, paths = reframe_project(project, _settings(work_dir))
+    except SnipzoError as exc:
+        _fail(exc)
+        return
+    typer.echo(
+        f"Reframed {len(paths)} clips for project {updated.id} -> {updated.crops_dir}"
+    )
+    for path in paths:
+        typer.echo(f"  {path.clip_id}: {path.mode} ({len(path.keyframes)} keyframes)")
 
 
 @app.command()
