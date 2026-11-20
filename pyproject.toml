@@ -35,6 +35,7 @@ dev = [
 ]
 pipeline = [
   "faster-whisper>=1.0",
+  "scenedetect[opencv]>=0.6",
 ]
 
 [project.scripts]
@@ -48,7 +49,7 @@ Issues = "https://github.com/Rachit7168/Snipzo/issues"
 where = ["src"]
 
 [tool.setuptools.package-data]
-snipzo = ["py.typed"]
+snipzo = ["py.typed", "pick/prompts/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -80,6 +81,6 @@ warn_unused_ignores = true
 show_error_codes = true
 
 [[tool.mypy.overrides]]
-module = ["faster_whisper", "faster_whisper.*"]
+module = ["faster_whisper", "faster_whisper.*", "scenedetect", "scenedetect.*"]
 ignore_missing_imports = true
 

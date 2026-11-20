@@ -23,7 +23,6 @@ def test_help_lists_pipeline_commands() -> None:
 @pytest.mark.parametrize(
     ("command", "issue"),
     [
-        ("pick", 4),
         ("reframe", 5),
         ("render", 6),
         ("metadata", 7),

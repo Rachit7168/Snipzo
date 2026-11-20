@@ -38,6 +38,22 @@ class Settings(BaseSettings):
         default=None,
         description="API key for the optional Deepgram transcription backend.",
     )
+    anthropic_model: str = Field(
+        default="claude-sonnet-4-5",
+        description="Claude model used for clip scoring and metadata.",
+    )
+    clip_count: int = Field(
+        default=5,
+        description="Number of highlight clips to select.",
+    )
+    clip_min_seconds: float = Field(
+        default=20.0,
+        description="Minimum highlight duration in seconds.",
+    )
+    clip_max_seconds: float = Field(
+        default=60.0,
+        description="Maximum highlight duration in seconds.",
+    )
     log_level: str = Field(
         default="INFO",
         description="Logging level (DEBUG, INFO, WARNING, ERROR).",

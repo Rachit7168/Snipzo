@@ -55,7 +55,13 @@ Transcribe the project with word-level timestamps (uses faster-whisper with the 
 snipzo transcribe PROJECT_ID --work-dir ./data
 ```
 
-Install the optional `pipeline` extra to get faster-whisper. Set `SNIPZO_TRANSCRIBER=deepgram` and `SNIPZO_DEEPGRAM_API_KEY` to use the hosted backend instead.
+Install the optional `pipeline` extra to get faster-whisper (and PySceneDetect for optional scene cuts). Set `SNIPZO_TRANSCRIBER=deepgram` and `SNIPZO_DEEPGRAM_API_KEY` to use the hosted backend instead.
+
+Pick highlight clips from the transcript (Claude when `SNIPZO_ANTHROPIC_API_KEY` is set, otherwise a deterministic heuristic). Boundaries snap to sentence ends with 0.2s padding:
+
+```bash
+snipzo pick PROJECT_ID --work-dir ./data
+```
 
 
 Run the quality checks (the same ones CI runs on `dev` and `main`):
@@ -73,7 +79,11 @@ Settings are loaded from environment variables (and an optional `.env` file) wit
 | Variable | Default | Purpose |
 |---|---|---|
 | `SNIPZO_WORK_DIR` | `./data` | Project working directory |
-| `SNIPZO_ANTHROPIC_API_KEY` | unset | Claude API key (clip selection and metadata) |
+| `SNIPZO_ANTHROPIC_API_KEY` | unset | Claude API key (clip selection and metadata); heuristic fallback if unset |
+| `SNIPZO_ANTHROPIC_MODEL` | `claude-sonnet-4-5` | Claude model |
+| `SNIPZO_CLIP_COUNT` | `5` | Number of highlight clips |
+| `SNIPZO_CLIP_MIN_SECONDS` | `20` | Minimum clip length |
+| `SNIPZO_CLIP_MAX_SECONDS` | `60` | Maximum clip length |
 | `SNIPZO_WHISPER_MODEL` | `base` | faster-whisper model size (use `small` or `large-v3` if you want) |
 | `SNIPZO_TRANSCRIBER` | `faster-whisper` | `faster-whisper` or `deepgram` |
 | `SNIPZO_DEEPGRAM_API_KEY` | unset | Required for the Deepgram backend |
