@@ -64,6 +64,51 @@ class Project(BaseModel):
     def project_json_path(self) -> Path:
         return self.root / "project.json"
 
+    @property
+    def transcript_path(self) -> Path:
+        return self.root / "transcript.json"
+
     def touch_status(self, status: ProjectStatus) -> Self:
         """Return a copy with an updated status and timestamp."""
         return self.model_copy(update={"status": status, "updated_at": utcnow()})
+
+
+class Word(BaseModel):
+    """A single word with timestamps."""
+
+    text: str
+    start: float
+    end: float
+    confidence: float | None = None
+
+
+class Segment(BaseModel):
+    """A transcript segment (typically a phrase or sentence)."""
+
+    start: float
+    end: float
+    text: str
+    words: list[Word] = Field(default_factory=list)
+    confidence: float | None = None
+
+
+class Transcript(BaseModel):
+    """Word-level transcript for a project."""
+
+    language: str
+    duration: float
+    segments: list[Segment] = Field(default_factory=list)
+    words: list[Word] = Field(default_factory=list)
+    backend: str | None = None
+    model: str | None = None
+
+    def text(self) -> str:
+        """Return the full transcript text."""
+        if self.segments:
+            return " ".join(
+                segment.text.strip()
+                for segment in self.segments
+                if segment.text.strip()
+            )
+        return " ".join(word.text for word in self.words)
+

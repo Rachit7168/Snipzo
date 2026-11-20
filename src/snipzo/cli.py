@@ -85,9 +85,32 @@ def ingest(
 
 
 @app.command()
-def transcribe() -> None:
+def transcribe(
+    project: Annotated[
+        str,
+        typer.Argument(help="Project ID or path to a project directory."),
+    ],
+    work_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--work-dir",
+            help="Project working directory (defaults to SNIPZO_WORK_DIR or ./data).",
+        ),
+    ] = None,
+) -> None:
     """Transcribe a project with word-level timestamps."""
-    _not_implemented(3)
+    from snipzo.transcribe import transcribe_project
+
+    try:
+        updated, transcript = transcribe_project(project, _settings(work_dir))
+    except SnipzoError as exc:
+        _fail(exc)
+        return
+    word_count = len(transcript.words)
+    typer.echo(
+        f"Transcribed project {updated.id} ({transcript.language}, "
+        f"{word_count} words) -> {updated.transcript_path}"
+    )
 
 
 @app.command()

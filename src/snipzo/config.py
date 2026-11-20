@@ -2,6 +2,7 @@
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -26,8 +27,16 @@ class Settings(BaseSettings):
         description="API key for Claude (clip selection and metadata generation).",
     )
     whisper_model: str = Field(
-        default="large-v3",
+        default="base",
         description="faster-whisper model size used for transcription.",
+    )
+    transcriber: Literal["faster-whisper", "deepgram"] = Field(
+        default="faster-whisper",
+        description="Transcription backend.",
+    )
+    deepgram_api_key: str | None = Field(
+        default=None,
+        description="API key for the optional Deepgram transcription backend.",
     )
     log_level: str = Field(
         default="INFO",
