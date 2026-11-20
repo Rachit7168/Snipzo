@@ -75,6 +75,14 @@ Render 1080×1920 30fps H.264 Shorts with word-by-word captions, a hook title, a
 snipzo render PROJECT_ID --work-dir ./data --style bold-yellow
 ```
 
+Generate a hook title (under 100 characters), description, hashtags (including #Shorts), and tags. Uses Claude when `SNIPZO_ANTHROPIC_API_KEY` is set, otherwise a heuristic:
+
+```bash
+snipzo metadata PROJECT_ID --work-dir ./data
+```
+
+Metadata JSON is saved next to each render as `renders/<clip-id>.json`.
+
 
 Run the quality checks (the same ones CI runs on `dev` and `main`):
 

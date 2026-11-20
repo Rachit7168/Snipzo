@@ -186,3 +186,15 @@ class Render(BaseModel):
     duration: float
     style_id: str = "bold-yellow"
 
+
+class ClipMetadata(BaseModel):
+    """Title, description, hashtags, and tags for a rendered clip."""
+
+    clip_id: str
+    title: str
+    description: str
+    hashtags: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+    hook_title: str | None = None
+    generator: str = "heuristic"
+
