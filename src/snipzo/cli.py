@@ -37,11 +37,6 @@ def main(
     """Snipzo command-line interface."""
 
 
-def _not_implemented(step: int) -> None:
-    typer.echo(f"Not implemented yet. Tracked in issue #{step}.")
-    raise typer.Exit(code=1)
-
-
 def _settings(work_dir: Path | None) -> Settings:
     settings = get_settings()
     if work_dir is not None:
@@ -243,3 +238,164 @@ def metadata(
     typer.echo(f"Wrote metadata for {len(items)} clips in project {updated.id}")
     for item in items:
         typer.echo(f"  {item.clip_id}: {item.title}")
+
+
+@app.command()
+def run(
+    video: Annotated[
+        Path | None,
+        typer.Argument(help="Path to a local video file."),
+    ] = None,
+    project: Annotated[
+        str | None,
+        typer.Option("--project", help="Resume an existing project ID or path."),
+    ] = None,
+    work_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--work-dir",
+            help="Project working directory (defaults to SNIPZO_WORK_DIR or ./data).",
+        ),
+    ] = None,
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="Re-run every stage, even if artifacts exist."),
+    ] = False,
+    top_n: Annotated[
+        int | None,
+        typer.Option("--top-n", help="Number of clips to keep (default: 5)."),
+    ] = None,
+    style: Annotated[
+        str | None,
+        typer.Option("--style", help="Caption style: bold-yellow or clean-white."),
+    ] = None,
+    eval_csv: Annotated[
+        Path | None,
+        typer.Option(
+            "--eval-csv",
+            help="Append clip rows to this ratings CSV for later human review.",
+        ),
+    ] = None,
+) -> None:
+    """Run ingest, transcribe, pick, metadata, reframe, and render.
+
+    Metadata runs before render so hook titles are burned into the Shorts.
+    Completed stages are skipped unless --force is passed.
+    """
+    from snipzo.eval.harness import ratings_rows_for_project, write_ratings_template
+    from snipzo.pipeline import run_pipeline
+
+    if video is None and project is None:
+        typer.secho("Provide a video path or --project to resume.", err=True)
+        raise typer.Exit(code=1)
+    if video is not None and not video.exists():
+        typer.secho(f"Video not found: {video}", err=True)
+        raise typer.Exit(code=1)
+
+    def on_progress(stage: str, message: str) -> None:
+        typer.echo(f"[{stage}] {message}")
+
+    try:
+        updated = run_pipeline(
+            video,
+            _settings(work_dir),
+            project_ref=project,
+            force=force,
+            top_n=top_n,
+            style_id=style,
+            on_progress=on_progress,
+        )
+    except SnipzoError as exc:
+        _fail(exc)
+        return
+    typer.echo(f"Done. Project {updated.id} -> {updated.renders_dir}")
+    if eval_csv is not None:
+        write_ratings_template(
+            eval_csv, ratings_rows_for_project(updated, video=video), append=True
+        )
+        typer.echo(f"Ratings template: {eval_csv}")
+
+
+eval_app = typer.Typer(
+    name="eval",
+    help="Run a test set and summarize human clip ratings.",
+    no_args_is_help=True,
+)
+app.add_typer(eval_app, name="eval")
+
+
+@eval_app.command("run")
+def eval_run(
+    videos: Annotated[
+        Path,
+        typer.Argument(
+            help="A video file, a directory of videos, or a text list of paths."
+        ),
+    ],
+    out_dir: Annotated[
+        Path,
+        typer.Option("--out-dir", help="Directory for the ratings CSV."),
+    ] = Path("evals"),
+    work_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--work-dir",
+            help="Project working directory (defaults to SNIPZO_WORK_DIR or ./data).",
+        ),
+    ] = None,
+    top_n: Annotated[
+        int | None,
+        typer.Option("--top-n", help="Number of clips to keep per video (default: 5)."),
+    ] = None,
+    style: Annotated[
+        str | None,
+        typer.Option("--style", help="Caption style: bold-yellow or clean-white."),
+    ] = None,
+) -> None:
+    """Run the pipeline on a test set and write a ratings CSV (usable/rating/notes)."""
+    from snipzo.eval import run_eval_set
+
+    def on_progress(stage: str, message: str) -> None:
+        typer.echo(f"[{stage}] {message}")
+
+    try:
+        projects, csv_path = run_eval_set(
+            videos,
+            _settings(work_dir),
+            out_dir,
+            top_n=top_n,
+            style_id=style,
+            on_progress=on_progress,
+        )
+    except SnipzoError as exc:
+        _fail(exc)
+        return
+    typer.echo(
+        f"Evaluated {len(projects)} video(s). Fill usable/rating/notes in {csv_path}"
+    )
+    typer.echo("Then run: snipzo eval summary " + str(csv_path))
+
+
+@eval_app.command("summary")
+def eval_summary_cmd(
+    ratings: Annotated[
+        Path,
+        typer.Argument(
+            help="Ratings CSV produced by `snipzo eval run` or `--eval-csv`."
+        ),
+    ],
+) -> None:
+    """Report the percent of rated clips marked usable without edits."""
+    from snipzo.eval import eval_summary
+
+    try:
+        stats = eval_summary(ratings)
+    except SnipzoError as exc:
+        _fail(exc)
+        return
+    typer.echo(
+        f"{stats['usable']}/{stats['rated']} rated clips usable without edits "
+        f"({stats['usable_percent']}%). "
+        f"{stats['clips']} clip rows total."
+    )
+

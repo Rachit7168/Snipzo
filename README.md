@@ -83,6 +83,21 @@ snipzo metadata PROJECT_ID --work-dir ./data
 
 Metadata JSON is saved next to each render as `renders/<clip-id>.json`.
 
+Run the full pipeline with one command (metadata is generated *before* render so hook titles are burned into the Shorts). Completed stages are skipped if you resume with `--project`:
+
+```bash
+snipzo run path/to/video.mp4 --work-dir ./data
+# later: snipzo run --project PROJECT_ID --work-dir ./data
+```
+
+Evaluate a folder of videos and record human ratings (usable without edits, 1-5 score, notes):
+
+```bash
+snipzo eval run path/to/videos --out-dir ./evals --work-dir ./data
+# fill usable/rating/notes in ./evals/ratings.csv, then:
+snipzo eval summary ./evals/ratings.csv
+```
+
 
 Run the quality checks (the same ones CI runs on `dev` and `main`):
 
@@ -131,6 +146,45 @@ src/snipzo/
   reframe/        # Step 5: 9:16 smart crop
   render/         # Step 6: captions, overlays, export
   metadata/       # Step 7: titles, descriptions, hashtags
+  pipeline.py     # Step 8: snipzo run (resumable)
+  eval/           # Step 8: ratings CSV harness
 ```
 
 PRs should target the `dev` branch, not `main`.
+
+## Demo
+
+From a local long-form video to vertical Shorts in one command. No API keys are required: clip picking and metadata use a deterministic heuristic when `SNIPZO_ANTHROPIC_API_KEY` is unset. Set that key to use Claude instead.
+
+```bash
+git clone https://github.com/Rachit7168/Snipzo.git
+cd Snipzo
+git checkout dev
+python -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev,pipeline]"
+
+mkdir -p /workspace/snipzo-demo
+# Public-domain talking-head interview (Voice of America / US government work),
+# from Wikimedia Commons — not YouTube:
+# https://commons.wikimedia.org/wiki/File:VOA_Interview,_Part_2-_Chelsea_Football_Star_Antonio_Rudiger.webm
+curl -L --fail -o /workspace/snipzo-demo/source.webm \
+  "https://commons.wikimedia.org/wiki/Special:FilePath/VOA_Interview,_Part_2-_Chelsea_Football_Star_Antonio_Rudiger.webm"
+ffmpeg -y -i /workspace/snipzo-demo/source.webm -c:v libx264 -pix_fmt yuv420p -c:a aac \
+  /workspace/snipzo-demo/source.mp4
+
+snipzo run /workspace/snipzo-demo/source.mp4 --work-dir /workspace/snipzo-demo/work
+
+# Shorts and metadata JSON:
+#   /workspace/snipzo-demo/work/<project-id>/renders/clip-*.mp4
+#   /workspace/snipzo-demo/work/<project-id>/renders/clip-*.json
+# Copy the Shorts and extract a preview frame:
+PROJECT=$(ls -1d /workspace/snipzo-demo/work/*/project.json | head -n1)
+PROJECT_DIR=$(dirname "$PROJECT")
+mkdir -p /workspace/snipzo-demo/renders
+cp -a "$PROJECT_DIR/renders/." /workspace/snipzo-demo/renders/
+FIRST=$(ls "$PROJECT_DIR"/renders/clip-*.mp4 | head -n1)
+ffmpeg -y -ss 2 -i "$FIRST" -frames:v 1 /workspace/snipzo-demo/frame.png
+```
+
+Attribution: Voice of America / VOA Africa. Public domain (US government work).
