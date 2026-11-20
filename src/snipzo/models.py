@@ -68,6 +68,10 @@ class Project(BaseModel):
     def transcript_path(self) -> Path:
         return self.root / "transcript.json"
 
+    @property
+    def clips_path(self) -> Path:
+        return self.root / "clips.json"
+
     def touch_status(self, status: ProjectStatus) -> Self:
         """Return a copy with an updated status and timestamp."""
         return self.model_copy(update={"status": status, "updated_at": utcnow()})
@@ -111,4 +115,34 @@ class Transcript(BaseModel):
                 if segment.text.strip()
             )
         return " ".join(word.text for word in self.words)
+
+
+class Clip(BaseModel):
+    """A scored highlight window, aligned to sentence boundaries."""
+
+    id: str
+    start: float
+    end: float
+    score: float
+    reason: str
+    hook_strength: float | None = None
+    standalone_clarity: float | None = None
+    emotion: float | None = None
+    length_score: float | None = None
+    hook_title: str | None = None
+    style_id: str = "default"
+
+    @property
+    def duration(self) -> float:
+        return max(0.0, self.end - self.start)
+
+
+class ClipSet(BaseModel):
+    """Selected clips for a project."""
+
+    clips: list[Clip] = Field(default_factory=list)
+    prompt_version: str | None = None
+    scorer: str = "heuristic"
+    min_clip_seconds: float | None = None
+    max_clip_seconds: float | None = None
 

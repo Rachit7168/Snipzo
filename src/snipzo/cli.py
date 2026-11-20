@@ -114,9 +114,40 @@ def transcribe(
 
 
 @app.command()
-def pick() -> None:
+def pick(
+    project: Annotated[
+        str,
+        typer.Argument(help="Project ID or path to a project directory."),
+    ],
+    work_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--work-dir",
+            help="Project working directory (defaults to SNIPZO_WORK_DIR or ./data).",
+        ),
+    ] = None,
+    top_n: Annotated[
+        int | None,
+        typer.Option("--top-n", help="Number of clips to keep (default: 5)."),
+    ] = None,
+) -> None:
     """Score and select highlight clips from a transcript."""
-    _not_implemented(4)
+    from snipzo.pick import pick_clips
+
+    try:
+        updated, clipset = pick_clips(project, _settings(work_dir), top_n=top_n)
+    except SnipzoError as exc:
+        _fail(exc)
+        return
+    typer.echo(
+        f"Picked {len(clipset.clips)} clips for project {updated.id} "
+        f"({clipset.scorer}) -> {updated.clips_path}"
+    )
+    for clip in clipset.clips:
+        typer.echo(
+            f"  {clip.id}  {clip.start:.1f}-{clip.end:.1f}s  "
+            f"score={clip.score:.2f}  {clip.reason}"
+        )
 
 
 @app.command()
