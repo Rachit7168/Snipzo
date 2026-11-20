@@ -1,3 +1,4 @@
+import pytest
 from typer.testing import CliRunner
 
 from snipzo import __version__
@@ -19,7 +20,17 @@ def test_help_lists_pipeline_commands() -> None:
         assert command in result.stdout
 
 
-def test_placeholder_subcommand_points_to_issue() -> None:
-    result = runner.invoke(app, ["ingest"])
+@pytest.mark.parametrize(
+    ("command", "issue"),
+    [
+        ("transcribe", 3),
+        ("pick", 4),
+        ("reframe", 5),
+        ("render", 6),
+        ("metadata", 7),
+    ],
+)
+def test_placeholder_subcommand_points_to_issue(command: str, issue: int) -> None:
+    result = runner.invoke(app, [command])
     assert result.exit_code == 1
-    assert "issue #2" in result.stdout
+    assert f"issue #{issue}" in result.stdout
