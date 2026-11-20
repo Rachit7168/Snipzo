@@ -123,9 +123,8 @@ def _optional_float(value: object) -> float | None:
 
 def load_pcm16_wav(path: Path) -> object:
     """Load a PCM WAV as float32 samples so we do not depend on PyAV."""
+    import array
     import wave
-
-    import numpy as np
 
     try:
         with wave.open(str(path), "rb") as handle:
@@ -138,8 +137,20 @@ def load_pcm16_wav(path: Path) -> object:
         raise SnipzoError(
             f"Expected 16-bit PCM audio, got {sample_width * 8}-bit: {path}"
         )
-    audio = np.frombuffer(frames, dtype="<i2").astype(np.float32) / 32768.0
+    samples = array.array("h")
+    samples.frombytes(frames)
     if channels > 1:
-        audio = audio.reshape(-1, channels).mean(axis=1)
-    return audio
+        frames_list = list(samples)
+        samples = array.array(
+            "h",
+            (
+                int(sum(frames_list[i : i + channels]) / channels)
+                for i in range(0, len(frames_list), channels)
+            ),
+        )
+    try:
+        import numpy as np
+    except ImportError:
+        return array.array("f", (value / 32768.0 for value in samples))
+    return np.frombuffer(samples, dtype="<i2").astype(np.float32) / 32768.0
 

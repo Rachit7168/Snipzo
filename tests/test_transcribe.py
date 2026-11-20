@@ -208,6 +208,7 @@ def test_load_pcm16_wav_roundtrip(tmp_path: Path) -> None:
         handle.setframerate(16000)
         handle.writeframes(b"".join(struct.pack("<h", value) for value in samples))
     audio = load_pcm16_wav(path)
-    assert len(audio) == 5
-    assert abs(float(audio[1]) - 0.5) < 0.01
+    values = [float(value) for value in audio]
+    assert len(values) == 5
+    assert abs(values[1] - 0.5) < 0.01
 
