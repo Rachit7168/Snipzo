@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import BaseModel, Field
 
@@ -71,6 +71,10 @@ class Project(BaseModel):
     @property
     def clips_path(self) -> Path:
         return self.root / "clips.json"
+
+    @property
+    def crops_dir(self) -> Path:
+        return self.root / "crops"
 
     def touch_status(self, status: ProjectStatus) -> Self:
         """Return a copy with an updated status and timestamp."""
@@ -145,4 +149,24 @@ class ClipSet(BaseModel):
     scorer: str = "heuristic"
     min_clip_seconds: float | None = None
     max_clip_seconds: float | None = None
+
+
+class CropKeyframe(BaseModel):
+    """A 9:16 crop window at a point in the source video."""
+
+    t: float
+    x: float
+    y: float
+    w: float
+    h: float
+
+
+class CropPath(BaseModel):
+    """Keyframe crop path for one clip, plus the framing mode."""
+
+    clip_id: str
+    mode: Literal["face", "center", "blur"]
+    keyframes: list[CropKeyframe] = Field(default_factory=list)
+    source_width: int
+    source_height: int
 
