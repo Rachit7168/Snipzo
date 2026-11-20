@@ -43,6 +43,13 @@ snipzo --version
 snipzo --help
 ```
 
+Ingest a local video (copies it into a project folder, probes it with `ffprobe`, and extracts 16 kHz mono WAV audio):
+
+```bash
+snipzo ingest path/to/video.mp4 --work-dir ./data
+```
+
+
 Run the quality checks (the same ones CI runs on `dev` and `main`):
 
 ```bash
