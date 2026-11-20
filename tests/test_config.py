@@ -18,7 +18,7 @@ def test_default_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     settings = Settings(_env_file=None)
     assert settings.work_dir == Path("./data")
     assert settings.anthropic_api_key is None
-    assert settings.whisper_model == "large-v3"
+    assert settings.whisper_model == "base"
     assert settings.log_level == "INFO"
 
 

@@ -32,7 +32,7 @@ cd Snipzo
 git checkout dev
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -e ".[dev]"
+pip install -e ".[dev,pipeline]"
 cp .env.example .env       # optional; see settings below
 ```
 
@@ -48,6 +48,14 @@ Ingest a local video (copies it into a project folder, probes it with `ffprobe`,
 ```bash
 snipzo ingest path/to/video.mp4 --work-dir ./data
 ```
+
+Transcribe the project with word-level timestamps (uses faster-whisper with the `base` model by default; CI tests mock this so they never download a model):
+
+```bash
+snipzo transcribe PROJECT_ID --work-dir ./data
+```
+
+Install the optional `pipeline` extra to get faster-whisper. Set `SNIPZO_TRANSCRIBER=deepgram` and `SNIPZO_DEEPGRAM_API_KEY` to use the hosted backend instead.
 
 
 Run the quality checks (the same ones CI runs on `dev` and `main`):
@@ -66,7 +74,9 @@ Settings are loaded from environment variables (and an optional `.env` file) wit
 |---|---|---|
 | `SNIPZO_WORK_DIR` | `./data` | Project working directory |
 | `SNIPZO_ANTHROPIC_API_KEY` | unset | Claude API key (clip selection and metadata) |
-| `SNIPZO_WHISPER_MODEL` | `large-v3` | Transcription model size |
+| `SNIPZO_WHISPER_MODEL` | `base` | faster-whisper model size (use `small` or `large-v3` if you want) |
+| `SNIPZO_TRANSCRIBER` | `faster-whisper` | `faster-whisper` or `deepgram` |
+| `SNIPZO_DEEPGRAM_API_KEY` | unset | Required for the Deepgram backend |
 | `SNIPZO_LOG_LEVEL` | `INFO` | Log verbosity |
 
 ### Docker
