@@ -76,6 +76,10 @@ class Project(BaseModel):
     def crops_dir(self) -> Path:
         return self.root / "crops"
 
+    @property
+    def renders_dir(self) -> Path:
+        return self.root / "renders"
+
     def touch_status(self, status: ProjectStatus) -> Self:
         """Return a copy with an updated status and timestamp."""
         return self.model_copy(update={"status": status, "updated_at": utcnow()})
@@ -169,4 +173,16 @@ class CropPath(BaseModel):
     keyframes: list[CropKeyframe] = Field(default_factory=list)
     source_width: int
     source_height: int
+
+
+class Render(BaseModel):
+    """A finished vertical Short exported from a clip."""
+
+    clip_id: str
+    path: Path
+    width: int = 1080
+    height: int = 1920
+    fps: float = 30
+    duration: float
+    style_id: str = "bold-yellow"
 

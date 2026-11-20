@@ -180,9 +180,42 @@ def reframe(
 
 
 @app.command()
-def render() -> None:
+def render(
+    project: Annotated[
+        str,
+        typer.Argument(help="Project ID or path to a project directory."),
+    ],
+    work_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--work-dir",
+            help="Project working directory (defaults to SNIPZO_WORK_DIR or ./data).",
+        ),
+    ] = None,
+    style: Annotated[
+        str | None,
+        typer.Option("--style", help="Caption style: bold-yellow or clean-white."),
+    ] = None,
+) -> None:
     """Render vertical Shorts with captions and a hook overlay."""
-    _not_implemented(6)
+    from snipzo.render import render_project
+
+    try:
+        updated, renders = render_project(
+            project, _settings(work_dir), style_id=style
+        )
+    except SnipzoError as exc:
+        _fail(exc)
+        return
+    typer.echo(
+        f"Rendered {len(renders)} Shorts for project {updated.id} "
+        f"-> {updated.renders_dir}"
+    )
+    for item in renders:
+        typer.echo(
+            f"  {item.clip_id}: {item.path} "
+            f"({item.width}x{item.height} @ {item.fps:.0f}fps, {item.duration:.1f}s)"
+        )
 
 
 @app.command()

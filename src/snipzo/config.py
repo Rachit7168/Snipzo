@@ -54,6 +54,10 @@ class Settings(BaseSettings):
         default=60.0,
         description="Maximum highlight duration in seconds.",
     )
+    caption_style: str = Field(
+        default="bold-yellow",
+        description="Caption preset: bold-yellow or clean-white.",
+    )
     log_level: str = Field(
         default="INFO",
         description="Logging level (DEBUG, INFO, WARNING, ERROR).",
