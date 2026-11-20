@@ -219,6 +219,27 @@ def render(
 
 
 @app.command()
-def metadata() -> None:
+def metadata(
+    project: Annotated[
+        str,
+        typer.Argument(help="Project ID or path to a project directory."),
+    ],
+    work_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--work-dir",
+            help="Project working directory (defaults to SNIPZO_WORK_DIR or ./data).",
+        ),
+    ] = None,
+) -> None:
     """Generate titles, descriptions, and hashtags for each clip."""
-    _not_implemented(7)
+    from snipzo.metadata import generate_metadata
+
+    try:
+        updated, items = generate_metadata(project, _settings(work_dir))
+    except SnipzoError as exc:
+        _fail(exc)
+        return
+    typer.echo(f"Wrote metadata for {len(items)} clips in project {updated.id}")
+    for item in items:
+        typer.echo(f"  {item.clip_id}: {item.title}")

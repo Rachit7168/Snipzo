@@ -52,7 +52,7 @@ Issues = "https://github.com/Rachit7168/Snipzo/issues"
 where = ["src"]
 
 [tool.setuptools.package-data]
-snipzo = ["py.typed", "pick/prompts/*"]
+snipzo = ["py.typed", "pick/prompts/*", "metadata/prompts/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
