@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from snipzo.api.blobstore import BlobStore, get_blob_store, render_key, source_key
 from snipzo.api.db import session_scope
 from snipzo.api.settings import ApiSettings, get_api_settings
-from snipzo.api.tables import ClipRow, Job, ProjectRow, RenderRow, TranscriptRow
+from snipzo.api.tables import ClipRow, Job, ProjectRow, RenderRow, TranscriptRow, User
 from snipzo.config import Settings, get_settings
 from snipzo.errors import SnipzoError
 from snipzo.models import ClipMetadata, Render
@@ -186,10 +186,17 @@ def run_ingest_and_transcribe(job_id: str) -> bool:
         finally:
             shutil.rmtree(scratch, ignore_errors=True)
 
+        from snipzo.api import billing
+
         with session_scope() as session:
             row = session.get(ProjectRow, project_id)
             if row is not None:
                 row.duration_seconds = project_model.source.duration
+                owner = session.get(User, row.user_id)
+                minutes = project_model.source.duration / 60.0
+                if owner is not None:
+                    billing.check_minutes(session, owner, api_settings, minutes)
+                    billing.record_usage(session, owner.id, project_id, minutes)
 
         _update_job(
             job_id,
@@ -313,7 +320,17 @@ def sync_project_outputs(
                 render = Render.model_validate(item)
                 renders[render.clip_id] = render
 
+    from snipzo.api import billing
+
+    api_settings = get_api_settings()
     with session_scope() as session:
+        project_row = session.get(ProjectRow, project_id)
+        owner = session.get(User, project_row.user_id) if project_row else None
+        plan = (
+            billing.plan_for(owner, api_settings)
+            if owner
+            else billing.plans(api_settings)["free"]
+        )
         for rank, clip in enumerate(clipset.clips, start=1):
             if clip_ids is not None and clip.id not in clip_ids:
                 continue
@@ -343,18 +360,21 @@ def sync_project_outputs(
             if not mp4.is_file():
                 continue
             session.flush()
+            billing.apply_plan_to_render(mp4, plan)
+            info = renders.get(clip.id)
+            out_height = min(info.height if info else 1920, plan.max_height)
+            out_width = int(round(out_height * 9 / 16 / 2) * 2)
             version = len(row.renders) + 1
             key = render_key(project_id, clip.id, version)
             store.put_file(key, mp4, content_type="video/mp4")
-            info = renders.get(clip.id)
             if info is not None:
                 row.style_id = info.style_id
             session.add(
                 RenderRow(
                     clip_row_id=row.id,
                     blob_key=key,
-                    width=info.width if info else 1080,
-                    height=info.height if info else 1920,
+                    width=out_width,
+                    height=out_height,
                     duration=info.duration if info else clip.duration,
                     size_bytes=mp4.stat().st_size,
                     version=version,

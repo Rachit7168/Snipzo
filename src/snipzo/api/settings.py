@@ -93,6 +93,17 @@ class ApiSettings(BaseSettings):
         description="How to fetch media for owned YouTube imports.",
     )
 
+    billing_enforced: bool = Field(
+        default=True,
+        description="Enforce monthly video/minute quotas and free-tier watermarking.",
+    )
+    free_videos_per_month: int = Field(default=3, ge=1)
+    free_minutes_per_month: int = Field(default=30, ge=1)
+    stripe_secret_key: str | None = None
+    stripe_webhook_secret: str | None = None
+    stripe_price_creator: str | None = None
+    stripe_price_pro: str | None = None
+
     def cors_origin_list(self) -> list[str]:
         return [item.strip() for item in self.cors_origins.split(",") if item.strip()]
 

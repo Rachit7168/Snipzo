@@ -20,6 +20,9 @@ export default function Nav() {
               <Link href="/channels" className="hover:text-white">
                 Channels
               </Link>
+              <Link href="/billing" className="hover:text-white">
+                Billing
+              </Link>
               <span className="hidden sm:inline">{session.user?.email}</span>
               <button className="btn-ghost py-1" onClick={() => signOut({ callbackUrl: "/login" })}>
                 Sign out

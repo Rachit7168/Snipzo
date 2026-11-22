@@ -15,7 +15,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
 from snipzo import __version__
-from snipzo.api import jobs
+from snipzo.api import billing, jobs
+from snipzo.api.billing_routes import router as billing_router
 from snipzo.api.blobstore import get_blob_store, source_key
 from snipzo.api.deps import Config, CurrentUser, DbSession
 from snipzo.api.schemas import (
@@ -176,6 +177,10 @@ def create_project(
             status.HTTP_400_BAD_REQUEST,
             "Confirm that you own or have rights to this content.",
         )
+    try:
+        billing.check_can_start_video(db, user, settings)
+    except SnipzoError as exc:
+        raise HTTPException(status.HTTP_402_PAYMENT_REQUIRED, str(exc)) from exc
     has_file = file is not None and bool(file.filename)
     if has_file == bool(source_url):
         raise HTTPException(
@@ -491,6 +496,7 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
     application.include_router(projects)
     application.include_router(files)
     application.include_router(youtube_router)
+    application.include_router(billing_router)
     application.include_router(legal)
     return application
 

@@ -10,6 +10,7 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
+from snipzo.api import billing
 from snipzo.api.deps import Config, CurrentUser, DbSession
 from snipzo.api.security import sign, unsign
 from snipzo.api.tables import Channel, ClipRow, Job, ProjectRow, Publication, User
@@ -20,6 +21,7 @@ from snipzo.api.youtube import (
     authorization_url,
     is_configured,
 )
+from snipzo.errors import SnipzoError
 from snipzo.ingest.service import new_project_id
 
 router = APIRouter(tags=["youtube"])
@@ -225,6 +227,10 @@ def youtube_import(
             status.HTTP_403_FORBIDDEN,
             "You can only import videos uploaded to your connected channel.",
         )
+    try:
+        billing.check_can_start_video(db, user, settings)
+    except SnipzoError as exc:
+        raise HTTPException(status.HTTP_402_PAYMENT_REQUIRED, str(exc)) from exc
     if settings.youtube_import_downloader == "disabled":
         raise HTTPException(
             status.HTTP_501_NOT_IMPLEMENTED,
