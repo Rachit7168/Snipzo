@@ -1,6 +1,13 @@
 export { default } from "next-auth/middleware";
 
-// Everything except sign-in, registration, legal pages, and static assets needs a session.
+// Public marketing pages (/ and /pricing), auth pages, and legal pages stay open.
 export const config = {
-  matcher: ["/", "/projects/:path*", "/billing/:path*", "/channels/:path*"],
+  matcher: [
+    "/projects",
+    "/projects/:path*",
+    "/billing",
+    "/billing/:path*",
+    "/channels",
+    "/channels/:path*",
+  ],
 };

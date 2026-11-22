@@ -35,7 +35,7 @@ export default function RegisterPage() {
         throw new Error("Account created, but we can't reach the sign-in service right now.");
       }
       if (!result?.ok) throw new Error("Account created, but automatic sign-in failed. Try signing in.");
-      window.location.assign("/");
+      window.location.assign("/projects");
     } catch (err) {
       const mapped = mapApiError(err, "Could not create the account.");
       if (mapped.fields && Object.keys(mapped.fields).length > 0) {

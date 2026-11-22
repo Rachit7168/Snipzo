@@ -1,6 +1,9 @@
 import Link from "next/link";
 
+import { getContactEmail } from "@/lib/site";
+
 export default function Footer() {
+  const contactEmail = getContactEmail();
   return (
     <footer className="border-t border-line bg-canvas">
       <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-6 text-xs text-ink-subtle sm:flex-row sm:items-center sm:justify-between sm:px-6">
@@ -10,6 +13,9 @@ export default function Footer() {
           <span>Long videos to vertical Shorts</span>
         </div>
         <div className="flex flex-wrap gap-4">
+          <Link href="/pricing" className="hover:text-ink">
+            Pricing
+          </Link>
           <Link href="/privacy" className="hover:text-ink">
             Privacy
           </Link>
@@ -19,6 +25,9 @@ export default function Footer() {
           <Link href="/takedown" className="hover:text-ink">
             Copyright &amp; takedown
           </Link>
+          <a href={`mailto:${contactEmail}`} className="hover:text-ink">
+            Contact
+          </a>
         </div>
       </div>
     </footer>
