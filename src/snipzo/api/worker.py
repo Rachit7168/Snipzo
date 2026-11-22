@@ -32,6 +32,7 @@ def configure_celery(settings: ApiSettings | None = None) -> Celery:
             "snipzo.ingest_transcribe": {"queue": "gpu"},
             "snipzo.highlights_render": {"queue": "cpu"},
             "snipzo.cleanup_sources": {"queue": "cpu"},
+            "snipzo.rerender_clip": {"queue": "cpu"},
         },
         beat_schedule={
             "cleanup-sources-daily": {
@@ -56,6 +57,11 @@ def highlights_render_task(job_id: str) -> bool:
     return jobs.run_highlights_and_render(job_id)
 
 
+@celery_app.task(name="snipzo.rerender_clip")
+def rerender_clip_task(job_id: str) -> bool:
+    return jobs.run_rerender(job_id)
+
+
 @celery_app.task(name="snipzo.cleanup_sources")
 def cleanup_sources_task() -> list[str]:
     return jobs.cleanup_sources()
@@ -68,3 +74,9 @@ def enqueue_pipeline(job_id: str) -> None:
         ingest_transcribe_task.si(job_id),
         highlights_render_task.si(job_id),
     ).apply_async()
+
+
+def enqueue_rerender(job_id: str) -> None:
+    """Queue a single-clip re-render on the CPU queue."""
+    configure_celery()
+    rerender_clip_task.delay(job_id)

@@ -69,3 +69,38 @@ class ProjectOut(BaseModel):
     updated_at: datetime
     job: JobOut | None = None
     clips: list[ClipOut] = Field(default_factory=list)
+
+
+class CaptionLineIO(BaseModel):
+    start: float = Field(ge=0)
+    end: float = Field(ge=0)
+    text: str = Field(max_length=200)
+
+
+class ClipEditIn(BaseModel):
+    start: float | None = Field(default=None, ge=0)
+    end: float | None = Field(default=None, ge=0)
+    hook_title: str | None = Field(default=None, max_length=120)
+    title: str | None = Field(default=None, max_length=100)
+    description: str | None = Field(default=None, max_length=5000)
+    hashtags: list[str] | None = Field(default=None, max_length=30)
+    style_id: str | None = None
+    captions: list[CaptionLineIO] | None = Field(default=None, max_length=400)
+    rerender: bool = True
+
+
+class ClipEditorOut(BaseModel):
+    project_id: str
+    clip: ClipOut
+    captions: list[CaptionLineIO]
+    captions_edited: bool
+    styles: list[str]
+    source_duration: float
+    source_url: str | None = None
+    job: JobOut | None = None
+
+
+class ClipEditResult(BaseModel):
+    clip: ClipOut
+    trimmed: bool
+    job: JobOut | None = None

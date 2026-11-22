@@ -141,7 +141,7 @@ def _header(style: CaptionStyle) -> str:
         "ScriptType: v4.00+\n"
         f"PlayResX: {OUTPUT_WIDTH}\n"
         f"PlayResY: {OUTPUT_HEIGHT}\n"
-        "WrapStyle: 2\n"
+        "WrapStyle: 0\n"
         "ScaledBorderAndShadow: yes\n"
         "\n"
         "[V4+ Styles]\n"

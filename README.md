@@ -196,6 +196,17 @@ npm run dev                  # http://localhost:3000
 
 Env vars: `NEXT_PUBLIC_API_URL` (browser → API), `SNIPZO_API_URL` (server → API, defaults to the public URL), `NEXTAUTH_URL`, `NEXTAUTH_SECRET`. With Docker, `docker compose up --build` also starts the web app on port 3000.
 
+## Clip editor
+
+Open a project in the web app and click **Edit** on any Short (`/projects/<id>/clips/<clip-id>`):
+
+- **Trim** start/end on a timeline (sliders or "set to playhead"); clips must be 3–180 s.
+- **Captions**: edit the text of each caption group; timing is kept. Changing the trim regenerates captions from the transcript.
+- **Title**: hook title (burned into the first seconds), YouTube title, description, hashtags (`#Shorts` is always kept), and caption style preset.
+- **Live preview** in the browser (source video in a 9:16 frame with the hook and caption overlay), then **Save & re-render** queues `snipzo.rerender_clip` on the CPU queue and shows the new render version when it finishes.
+
+API: `GET /projects/{id}/clips/{clip_id}/editor` and `PATCH /projects/{id}/clips/{clip_id}` (body fields: `start`, `end`, `hook_title`, `title`, `description`, `hashtags`, `style_id`, `captions`, `rerender`). Edits are stored in the project folder (`clips.json`, `renders/<clip>.json`, `edits/<clip>.json`). Editing requires the source video, so it stops working once the source retention window has passed.
+
 ## Project layout
 
 ```
@@ -209,6 +220,7 @@ src/snipzo/
   render/         # Step 6: captions, overlays, export
   metadata/       # Step 7: titles, descriptions, hashtags
   pipeline.py     # Step 8: snipzo run (resumable)
+  edit.py         # Step 11: trim/caption/title edits and single-clip re-render
   eval/           # Step 8: ratings CSV harness
   api/            # Step 9: FastAPI app, Celery worker, DB models, blob storage
 web/              # Step 10: Next.js app (sign-in, upload, progress, preview, download)

@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import type { Clip } from "@/lib/api";
 import { formatSeconds } from "@/lib/api";
 
@@ -40,9 +42,9 @@ export default function ClipCard({ clip, editHref }: { clip: Clip; editHref?: st
           </a>
         )}
         {editHref && (
-          <a className="btn-ghost" href={editHref}>
+          <Link className="btn-ghost" href={editHref}>
             Edit
-          </a>
+          </Link>
         )}
       </div>
     </article>

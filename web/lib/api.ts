@@ -117,3 +117,18 @@ export function formatSeconds(value: number | null | undefined): string {
   const seconds = total % 60;
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
+
+export type CaptionLine = { start: number; end: number; text: string };
+
+export type ClipEditor = {
+  project_id: string;
+  clip: Clip;
+  captions: CaptionLine[];
+  captions_edited: boolean;
+  styles: string[];
+  source_duration: number;
+  source_url: string | null;
+  job: Job | null;
+};
+
+export type ClipEditResult = { clip: Clip; trimmed: boolean; job: Job | null };
