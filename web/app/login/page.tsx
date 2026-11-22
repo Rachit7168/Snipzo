@@ -6,6 +6,7 @@ import { signIn } from "next-auth/react";
 import { Suspense, useState, type FormEvent } from "react";
 
 import { useToast } from "@/components/Toast";
+import { Alert, Button, Card, Input } from "@/components/ui";
 
 function LoginForm() {
   const params = useSearchParams();
@@ -42,7 +43,6 @@ function LoginForm() {
         redirect: false,
       });
       if (result?.ok) {
-        // Full navigation so cached middleware redirects from before sign-in are dropped.
         window.location.assign(params.get("callbackUrl") || "/");
         return;
       }
@@ -63,69 +63,49 @@ function LoginForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} noValidate className="card mx-auto mt-10 max-w-md space-y-4">
-      <h1 className="text-2xl font-bold">Sign in</h1>
+    <Card className="mx-auto mt-6 max-w-md sm:mt-10">
+      <form onSubmit={onSubmit} noValidate className="space-y-4">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-bold tracking-tight text-ink">Sign in</h1>
+          <p className="text-sm text-ink-muted">Welcome back to Snipzo.</p>
+        </div>
 
-      <div className="space-y-1">
-        <label htmlFor="login-email" className="block text-xs font-medium text-neutral-300">
-          Email
-        </label>
-        <input
+        <Input
           id="login-email"
-          className="input"
           name="email"
           type="email"
+          label="Email"
           placeholder="you@example.com"
           autoComplete="email"
           required
-          aria-invalid={Boolean(fieldErrors.email)}
-          aria-describedby={fieldErrors.email ? "login-email-error" : undefined}
+          error={fieldErrors.email}
         />
-        {fieldErrors.email && (
-          <p id="login-email-error" className="text-xs text-red-400">
-            {fieldErrors.email}
-          </p>
-        )}
-      </div>
 
-      <div className="space-y-1">
-        <label htmlFor="login-password" className="block text-xs font-medium text-neutral-300">
-          Password
-        </label>
-        <input
+        <Input
           id="login-password"
-          className="input"
           name="password"
           type="password"
+          label="Password"
           placeholder="Password"
           autoComplete="current-password"
           required
-          aria-invalid={Boolean(fieldErrors.password)}
-          aria-describedby={fieldErrors.password ? "login-password-error" : undefined}
+          error={fieldErrors.password}
         />
-        {fieldErrors.password && (
-          <p id="login-password-error" className="text-xs text-red-400">
-            {fieldErrors.password}
-          </p>
-        )}
-      </div>
 
-      {formError && (
-        <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-          {formError}
-        </div>
-      )}
+        {formError && <Alert tone="error">{formError}</Alert>}
 
-      <button className="btn w-full" disabled={busy}>
-        {busy ? "Signing in..." : "Sign in"}
-      </button>
-      <p className="text-sm text-neutral-400">
-        New here?{" "}
-        <Link className="text-brand" href="/register">
-          Create an account
-        </Link>
-      </p>
-    </form>
+        <Button type="submit" fullWidth loading={busy}>
+          {busy ? "Signing in..." : "Sign in"}
+        </Button>
+
+        <p className="text-sm text-ink-muted">
+          New here?{" "}
+          <Link className="font-medium text-brand-text hover:underline" href="/register">
+            Create an account
+          </Link>
+        </p>
+      </form>
+    </Card>
   );
 }
 

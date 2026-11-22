@@ -4,9 +4,15 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 import { useToast } from "@/components/Toast";
+import { Alert, Button, Card, Checkbox, Input, Tabs } from "@/components/ui";
 import { uploadProject } from "@/lib/api";
 import { mapApiError } from "@/lib/errors";
 import { checkSourceUrl } from "@/lib/youtubeUrl";
+
+const SOURCE_TABS = [
+  { id: "file" as const, label: "Upload" },
+  { id: "url" as const, label: "Paste URL" },
+];
 
 export default function UploadForm({ token }: { token: string }) {
   const router = useRouter();
@@ -67,125 +73,87 @@ export default function UploadForm({ token }: { token: string }) {
   }
 
   return (
-    <form onSubmit={onSubmit} noValidate className="card space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">New project</h2>
-        <div className="flex gap-1 rounded-lg bg-neutral-800 p-1 text-sm">
-          {(["file", "url"] as const).map((item) => (
-            <button
-              key={item}
-              type="button"
-              onClick={() => {
-                setMode(item);
-                setFieldErrors({});
-                setFormError(null);
-              }}
-              className={`rounded-md px-3 py-1 ${mode === item ? "bg-neutral-950 text-white" : "text-neutral-400"}`}
-            >
-              {item === "file" ? "Upload" : "Paste URL"}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="space-y-1">
-        <label htmlFor="upload-title" className="block text-xs font-medium text-neutral-300">
-          Title (optional)
-        </label>
-        <input id="upload-title" className="input" name="title" placeholder="My podcast highlight" />
-      </div>
-
-      {mode === "file" ? (
-        <div className="space-y-1">
-          <label htmlFor="upload-file" className="block text-xs font-medium text-neutral-300">
-            Video file
-          </label>
-          <input
-            id="upload-file"
-            className="input file:mr-3 file:rounded-md file:border-0 file:bg-brand file:px-3 file:py-1 file:font-semibold file:text-neutral-950"
-            type="file"
-            name="file"
-            accept="video/mp4,video/quicktime,video/webm,video/x-matroska,.mp4,.mov,.webm,.mkv,.m4v"
-            aria-invalid={Boolean(fieldErrors.file)}
-            aria-describedby={fieldErrors.file ? "upload-file-error" : undefined}
+    <Card>
+      <form onSubmit={onSubmit} noValidate className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-lg font-bold tracking-tight text-ink">New project</h2>
+          <Tabs
+            label="Video source type"
+            items={SOURCE_TABS}
+            value={mode}
+            onChange={(next) => {
+              setMode(next);
+              setFieldErrors({});
+              setFormError(null);
+            }}
           />
-          {fieldErrors.file && (
-            <p id="upload-file-error" className="text-xs text-red-400">
-              {fieldErrors.file}
-            </p>
-          )}
         </div>
-      ) : (
-        <div className="space-y-1">
-          <label htmlFor="upload-url" className="block text-xs font-medium text-neutral-300">
-            YouTube or direct video URL
-          </label>
-          <input
+
+        <Input
+          id="upload-title"
+          name="title"
+          label="Title (optional)"
+          placeholder="My podcast highlight"
+        />
+
+        {mode === "file" ? (
+          <Input
+            id="upload-file"
+            name="file"
+            type="file"
+            label="Video file"
+            accept="video/mp4,video/quicktime,video/webm,video/x-matroska,.mp4,.mov,.webm,.mkv,.m4v"
+            error={fieldErrors.file}
+            className="file:mr-3 file:rounded-md file:border-0 file:bg-brand file:px-3 file:py-1 file:text-xs file:font-semibold file:text-brand-fg"
+          />
+        ) : (
+          <Input
             id="upload-url"
-            className="input"
             name="source_url"
             type="url"
+            label="YouTube or direct video URL"
             placeholder="https://www.youtube.com/watch?v=… or a direct .mp4 link"
-            aria-invalid={Boolean(fieldErrors.source_url)}
-            aria-describedby={fieldErrors.source_url ? "upload-url-error" : undefined}
+            error={fieldErrors.source_url}
+            hint="Paste any YouTube video link (watch, Shorts, youtu.be, live replay, or embed) or a direct link to a video file. Playlists, channels, TikTok, and Instagram are not supported."
           />
-          {fieldErrors.source_url && (
-            <p id="upload-url-error" className="text-xs text-red-400">
-              {fieldErrors.source_url}
-            </p>
-          )}
-          <p className="text-xs text-neutral-500">
-            Paste any YouTube video link (watch, Shorts, youtu.be, live replay, or embed) or a
-            direct link to a video file. Playlists, channel pages, TikTok, and Instagram are not
-            supported. You must own or have rights to the content.
-          </p>
-        </div>
-      )}
-
-      <div className="space-y-1">
-        <label className="flex items-start gap-2 text-sm text-neutral-300">
-          <input
-            type="checkbox"
-            className="mt-1 accent-yellow-400"
-            checked={rights}
-            onChange={(event) => {
-              setRights(event.target.checked);
-              if (event.target.checked) {
-                setFieldErrors((prev) => {
-                  const next = { ...prev };
-                  delete next.rights_confirmed;
-                  return next;
-                });
-              }
-            }}
-            aria-invalid={Boolean(fieldErrors.rights_confirmed)}
-          />
-          <span>I own or have rights to this content.</span>
-        </label>
-        {fieldErrors.rights_confirmed && (
-          <p className="text-xs text-red-400">{fieldErrors.rights_confirmed}</p>
         )}
-      </div>
 
-      {formError && (
-        <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-          {formError}
-        </div>
-      )}
+        <Checkbox
+          checked={rights}
+          onChange={(event) => {
+            setRights(event.target.checked);
+            if (event.target.checked) {
+              setFieldErrors((prev) => {
+                const next = { ...prev };
+                delete next.rights_confirmed;
+                return next;
+              });
+            }
+          }}
+          label="I own or have rights to this content."
+          error={fieldErrors.rights_confirmed}
+        />
 
-      {progress !== null && (
-        <div className="space-y-1">
-          <div className="h-2 overflow-hidden rounded-full bg-neutral-800">
-            <div className="h-full bg-brand transition-all" style={{ width: `${Math.round(progress * 100)}%` }} />
+        {formError && <Alert tone="error">{formError}</Alert>}
+
+        {progress !== null && (
+          <div className="space-y-1.5">
+            <div className="h-2 overflow-hidden rounded-full bg-surface-muted">
+              <div
+                className="h-full bg-brand transition-all"
+                style={{ width: `${Math.round(progress * 100)}%` }}
+              />
+            </div>
+            <p className="text-xs text-ink-muted">
+              {progress < 1 ? `Uploading ${Math.round(progress * 100)}%` : "Uploaded. Starting the job..."}
+            </p>
           </div>
-          <p className="text-xs text-neutral-400">
-            {progress < 1 ? `Uploading ${Math.round(progress * 100)}%` : "Uploaded. Starting the job..."}
-          </p>
-        </div>
-      )}
-      <button className="btn w-full" disabled={progress !== null}>
-        Make Shorts
-      </button>
-    </form>
+        )}
+
+        <Button type="submit" fullWidth loading={progress !== null}>
+          {progress !== null ? "Uploading..." : "Make Shorts"}
+        </Button>
+      </form>
+    </Card>
   );
 }

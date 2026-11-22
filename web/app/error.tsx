@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect } from "react";
 
+import { Badge, Button, buttonClasses } from "@/components/ui";
+
 export default function AppError({
   error,
   reset,
@@ -16,20 +18,16 @@ export default function AppError({
 
   return (
     <div className="mx-auto flex max-w-lg flex-col items-center py-16 text-center">
-      <span className="rounded-full border border-red-500/30 bg-red-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-red-300">
-        Something went wrong
-      </span>
-      <h1 className="mt-4 text-3xl font-black tracking-tight text-white">
+      <Badge tone="danger">Something went wrong</Badge>
+      <h1 className="mt-4 text-3xl font-black tracking-tight text-ink">
         We hit an unexpected snag
       </h1>
-      <p className="mt-2 text-sm text-neutral-400">
+      <p className="mt-2 text-sm text-ink-muted">
         Your work is safe. Try reloading this view, or head back to your projects.
       </p>
       <div className="mt-6 flex flex-wrap justify-center gap-3">
-        <button type="button" onClick={reset} className="btn">
-          Try again
-        </button>
-        <Link href="/" className="btn-ghost">
+        <Button onClick={reset}>Try again</Button>
+        <Link href="/" className={buttonClasses({ variant: "ghost" })}>
           Back to projects
         </Link>
       </div>

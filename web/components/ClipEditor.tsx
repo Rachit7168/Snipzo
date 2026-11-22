@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useToast } from "@/components/Toast";
-import { mapApiError, sanitizeJobErrorText } from "@/lib/errors";
+import { Alert, Button, Card, Input, Select, Skeleton, Tabs, Textarea } from "@/components/ui";
 import {
   apiFetch,
   formatSeconds,
@@ -12,6 +12,7 @@ import {
   type ClipEditor as EditorData,
   type ClipEditResult,
 } from "@/lib/api";
+import { mapApiError, sanitizeJobErrorText } from "@/lib/errors";
 
 const STYLE_PREVIEW: Record<string, { caption: string; hook: string }> = {
   "bold-yellow": {
@@ -23,6 +24,12 @@ const STYLE_PREVIEW: Record<string, { caption: string; hook: string }> = {
     hook: "text-white text-lg font-bold uppercase [text-shadow:_0_0_3px_#222]",
   },
 };
+
+const EDITOR_TABS = [
+  { id: "trim" as const, label: "Trim" },
+  { id: "details" as const, label: "Details" },
+  { id: "captions" as const, label: "Captions" },
+];
 
 function round(value: number) {
   return Math.round(value * 10) / 10;
@@ -42,6 +49,7 @@ export default function ClipEditor({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [mobileTab, setMobileTab] = useState<"trim" | "details" | "captions">("trim");
   const [start, setStart] = useState(0);
   const [end, setEnd] = useState(0);
   const [hookTitle, setHookTitle] = useState("");
@@ -73,10 +81,14 @@ export default function ClipEditor({
   }, [projectId, clipId, token]);
 
   useEffect(() => {
-    load().catch((err: unknown) => setError(mapApiError(err, "Could not load clip editor.").message));
+    load().catch((err: unknown) =>
+      setError(mapApiError(err, "Could not load clip editor.").message),
+    );
   }, [load]);
 
-  const trimmed = data ? Math.abs(start - data.clip.start) > 0.01 || Math.abs(end - data.clip.end) > 0.01 : false;
+  const trimmed = data
+    ? Math.abs(start - data.clip.start) > 0.01 || Math.abs(end - data.clip.end) > 0.01
+    : false;
   const relative = time - start;
   const activeCaption = useMemo(
     () => captions.find((line) => relative >= line.start && relative < line.end + 0.05),
@@ -139,7 +151,11 @@ export default function ClipEditor({
       }
       if (job?.status === "failed") throw new Error(sanitizeJobErrorText(job.error));
       await load();
-      setNotice(result.trimmed ? "Saved. Trim changed, so captions were regenerated." : "Saved and re-rendered.");
+      const msg = result.trimmed
+        ? "Saved. Trim changed, so captions were regenerated."
+        : "Saved and re-rendered.";
+      setNotice(msg);
+      showToast({ title: "Clip updated", message: msg, tone: "success" });
     } catch (err) {
       const mapped = mapApiError(err, "Save failed.");
       setError(mapped.message);
@@ -149,37 +165,209 @@ export default function ClipEditor({
     }
   }
 
-  if (error && !data) return <p className="text-red-400">{error}</p>;
-  if (!data) return <p className="text-neutral-400">Loading editor...</p>;
+  if (error && !data) {
+    return (
+      <Alert tone="error" title="Could not open editor">
+        {error}
+      </Alert>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="space-y-6" aria-busy="true" aria-label="Loading editor">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-8 w-44" />
+          <Skeleton className="h-9 w-36" />
+        </div>
+        <div className="grid gap-6 lg:grid-cols-[340px_1fr]">
+          <Skeleton className="aspect-[9/16] w-full max-w-[340px] rounded-2xl" />
+          <div className="space-y-4">
+            <Skeleton className="h-36 w-full" />
+            <Skeleton className="h-64 w-full" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const duration = data.source_duration;
   const pct = (value: number) => `${(value / duration) * 100}%`;
+
+  const trimCard = (
+    <Card className="space-y-3">
+      <h2 className="font-semibold text-ink">Trim</h2>
+      <div className="relative h-8 rounded-md bg-surface-muted">
+        <div
+          className="absolute inset-y-0 rounded-md bg-brand/40 ring-2 ring-brand"
+          style={{ left: pct(start), width: pct(Math.max(0, end - start)) }}
+        />
+        <div className="absolute inset-y-0 w-0.5 bg-white" style={{ left: pct(Math.min(time, duration)) }} />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-2 text-sm">
+          <label htmlFor="trim-start" className="block text-ink-muted">
+            Start {formatSeconds(start)}
+          </label>
+          <input
+            id="trim-start"
+            aria-label="Trim start"
+            type="range"
+            min={0}
+            max={duration}
+            step={0.1}
+            value={start}
+            onChange={(event) => {
+              const value = Math.min(Number(event.target.value), end - 3);
+              setStart(Math.max(0, value));
+              seek(Math.max(0, value));
+            }}
+            className="w-full accent-brand"
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            fullWidth
+            onClick={() => setStart(round(Math.min(time, end - 3)))}
+          >
+            Set start to playhead
+          </Button>
+        </div>
+        <div className="space-y-2 text-sm">
+          <label htmlFor="trim-end" className="block text-ink-muted">
+            End {formatSeconds(end)} · length {Math.round(end - start)}s
+          </label>
+          <input
+            id="trim-end"
+            aria-label="Trim end"
+            type="range"
+            min={0}
+            max={duration}
+            step={0.1}
+            value={end}
+            onChange={(event) => {
+              const value = Math.max(Number(event.target.value), start + 3);
+              setEnd(Math.min(duration, value));
+              seek(Math.max(start, Math.min(duration, value) - 2));
+            }}
+            className="w-full accent-brand"
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            fullWidth
+            onClick={() => setEnd(round(Math.max(time, start + 3)))}
+          >
+            Set end to playhead
+          </Button>
+        </div>
+      </div>
+    </Card>
+  );
+
+  const detailsCard = (
+    <Card className="space-y-3">
+      <h2 className="font-semibold text-ink">Title and metadata</h2>
+      <Input
+        label="Hook title (burned in for the first seconds)"
+        value={hookTitle}
+        maxLength={120}
+        onChange={(e) => setHookTitle(e.target.value)}
+      />
+      <Input
+        label={`YouTube title (${title.length}/100)`}
+        value={title}
+        maxLength={100}
+        onChange={(e) => setTitle(e.target.value)}
+      />
+      <Textarea
+        label="Description"
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+      />
+      <Input
+        label="Hashtags (#Shorts is always included)"
+        value={hashtags}
+        onChange={(e) => setHashtags(e.target.value)}
+      />
+      <Select
+        label="Caption style"
+        value={styleId}
+        onChange={(e) => setStyleId(e.target.value)}
+      >
+        {data.styles.map((style) => (
+          <option key={style} value={style}>
+            {style}
+          </option>
+        ))}
+      </Select>
+    </Card>
+  );
+
+  const captionsCard = (
+    <Card className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="font-semibold text-ink">Captions</h2>
+        {trimmed && (
+          <span className="text-xs text-amber-300">Trim changed: captions will be regenerated.</span>
+        )}
+      </div>
+      <ol className="max-h-96 space-y-2 overflow-y-auto pr-1">
+        {captions.map((line, index) => (
+          <li key={`${line.start}-${index}`} className="flex items-center gap-2">
+            <button
+              type="button"
+              className="w-20 shrink-0 text-left text-xs text-ink-subtle hover:text-ink"
+              onClick={() => seek(start + line.start)}
+            >
+              {line.start.toFixed(1)}–{line.end.toFixed(1)}s
+            </button>
+            <input
+              aria-label={`Caption ${index + 1}`}
+              className="input py-1"
+              value={line.text}
+              disabled={trimmed}
+              onChange={(event) => {
+                const next = captions.slice();
+                next[index] = { ...line, text: event.target.value };
+                setCaptions(next);
+                setCaptionsDirty(true);
+              }}
+            />
+          </li>
+        ))}
+      </ol>
+    </Card>
+  );
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <Link href={`/projects/${projectId}`} className="text-sm text-neutral-400 hover:text-white">
+          <Link href={`/projects/${projectId}`} className="text-sm text-ink-muted hover:text-ink">
             ← Back to project
           </Link>
-          <h1 className="text-2xl font-bold">Edit {data.clip.clip_id}</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-ink">Edit {data.clip.clip_id}</h1>
         </div>
-        <button className="btn" onClick={save} disabled={saving || !data.source_url}>
+        <Button onClick={save} loading={saving} disabled={!data.source_url}>
           {saving ? "Saving..." : "Save & re-render"}
-        </button>
+        </Button>
       </div>
+
       {!data.source_url && (
-        <p className="card text-sm text-yellow-300">
+        <Alert tone="warning">
           The source video was deleted after the retention window, so this clip can no longer be re-rendered.
-        </p>
+        </Alert>
       )}
-      {error && <p className="text-sm text-red-400">{error}</p>}
-      {notice && <p className="text-sm text-emerald-300">{notice}</p>}
+      {error && <Alert tone="error">{error}</Alert>}
+      {notice && <Alert tone="success">{notice}</Alert>}
 
       <div className="grid gap-6 lg:grid-cols-[340px_1fr]">
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">Live preview</h2>
-          <div className="relative mx-auto aspect-[9/16] w-full max-w-[340px] overflow-hidden rounded-2xl bg-black">
+        <section className="space-y-3 lg:sticky lg:top-20 lg:self-start">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
+            Live preview
+          </h2>
+          <div className="relative mx-auto aspect-[9/16] w-full max-w-[260px] overflow-hidden rounded-2xl bg-black sm:max-w-[320px] lg:max-w-[340px]">
             {data.source_url && (
               <video
                 ref={videoRef}
@@ -202,12 +390,12 @@ export default function ClipEditor({
               </div>
             )}
           </div>
-          <p className="text-center text-xs text-neutral-500">
+          <p className="text-center text-xs text-ink-subtle">
             Preview approximates the final framing; the render uses face tracking.
           </p>
           {data.clip.download_url && (
-            <div className="space-y-1">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">
+            <div className="hidden space-y-1 lg:block">
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
                 Current render (v{data.clip.render_version})
               </h2>
               <video
@@ -221,121 +409,25 @@ export default function ClipEditor({
           )}
         </section>
 
-        <section className="space-y-5">
-          <div className="card space-y-3">
-            <h2 className="font-semibold">Trim</h2>
-            <div className="relative h-8 rounded-md bg-neutral-800">
-              <div
-                className="absolute inset-y-0 rounded-md bg-brand/40 ring-2 ring-brand"
-                style={{ left: pct(start), width: pct(Math.max(0, end - start)) }}
-              />
-              <div className="absolute inset-y-0 w-0.5 bg-white" style={{ left: pct(Math.min(time, duration)) }} />
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="space-y-1 text-sm">
-                <span className="text-neutral-400">Start {formatSeconds(start)}</span>
-                <input
-                  aria-label="Trim start"
-                  type="range"
-                  min={0}
-                  max={duration}
-                  step={0.1}
-                  value={start}
-                  onChange={(event) => {
-                    const value = Math.min(Number(event.target.value), end - 3);
-                    setStart(Math.max(0, value));
-                    seek(Math.max(0, value));
-                  }}
-                  className="w-full accent-yellow-400"
-                />
-                <button type="button" className="btn-ghost w-full py-1 text-xs" onClick={() => setStart(round(Math.min(time, end - 3)))}>
-                  Set start to playhead
-                </button>
-              </label>
-              <label className="space-y-1 text-sm">
-                <span className="text-neutral-400">End {formatSeconds(end)} · length {Math.round(end - start)}s</span>
-                <input
-                  aria-label="Trim end"
-                  type="range"
-                  min={0}
-                  max={duration}
-                  step={0.1}
-                  value={end}
-                  onChange={(event) => {
-                    const value = Math.max(Number(event.target.value), start + 3);
-                    setEnd(Math.min(duration, value));
-                    seek(Math.max(start, Math.min(duration, value) - 2));
-                  }}
-                  className="w-full accent-yellow-400"
-                />
-                <button type="button" className="btn-ghost w-full py-1 text-xs" onClick={() => setEnd(round(Math.max(time, start + 3)))}>
-                  Set end to playhead
-                </button>
-              </label>
-            </div>
-          </div>
+        {/* Mobile tabbed controls */}
+        <section className="space-y-4 lg:hidden">
+          <Tabs
+            label="Editor sections"
+            items={EDITOR_TABS}
+            value={mobileTab}
+            onChange={setMobileTab}
+            className="w-full justify-between"
+          />
+          {mobileTab === "trim" && trimCard}
+          {mobileTab === "details" && detailsCard}
+          {mobileTab === "captions" && captionsCard}
+        </section>
 
-          <div className="card space-y-3">
-            <h2 className="font-semibold">Title and metadata</h2>
-            <label className="block space-y-1 text-sm">
-              <span className="text-neutral-400">Hook title (burned in for the first seconds)</span>
-              <input className="input" value={hookTitle} maxLength={120} onChange={(e) => setHookTitle(e.target.value)} />
-            </label>
-            <label className="block space-y-1 text-sm">
-              <span className="text-neutral-400">YouTube title ({title.length}/100)</span>
-              <input className="input" value={title} maxLength={100} onChange={(e) => setTitle(e.target.value)} />
-            </label>
-            <label className="block space-y-1 text-sm">
-              <span className="text-neutral-400">Description</span>
-              <textarea className="input min-h-24" value={description} onChange={(e) => setDescription(e.target.value)} />
-            </label>
-            <label className="block space-y-1 text-sm">
-              <span className="text-neutral-400">Hashtags (#Shorts is always included)</span>
-              <input className="input" value={hashtags} onChange={(e) => setHashtags(e.target.value)} />
-            </label>
-            <label className="block space-y-1 text-sm">
-              <span className="text-neutral-400">Caption style</span>
-              <select className="input" value={styleId} onChange={(e) => setStyleId(e.target.value)}>
-                {data.styles.map((style) => (
-                  <option key={style} value={style}>
-                    {style}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          <div className="card space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="font-semibold">Captions</h2>
-              {trimmed && <span className="text-xs text-yellow-300">Trim changed: captions will be regenerated.</span>}
-            </div>
-            <ol className="max-h-96 space-y-2 overflow-y-auto pr-1">
-              {captions.map((line, index) => (
-                <li key={`${line.start}-${index}`} className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="w-20 shrink-0 text-left text-xs text-neutral-500 hover:text-white"
-                    onClick={() => seek(start + line.start)}
-                  >
-                    {line.start.toFixed(1)}–{line.end.toFixed(1)}s
-                  </button>
-                  <input
-                    aria-label={`Caption ${index + 1}`}
-                    className="input py-1"
-                    value={line.text}
-                    disabled={trimmed}
-                    onChange={(event) => {
-                      const next = captions.slice();
-                      next[index] = { ...line, text: event.target.value };
-                      setCaptions(next);
-                      setCaptionsDirty(true);
-                    }}
-                  />
-                </li>
-              ))}
-            </ol>
-          </div>
+        {/* Desktop stacked workspace */}
+        <section className="hidden space-y-5 lg:block">
+          {trimCard}
+          {detailsCard}
+          {captionsCard}
         </section>
       </div>
     </div>

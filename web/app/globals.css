@@ -2,22 +2,85 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  @apply bg-neutral-950 text-neutral-100 antialiased;
+:root,
+.dark {
+  --bg: #09090b;
+  --surface: #121216;
+  --surface-elevated: #18181d;
+  --surface-muted: #202026;
+  --border: #27272a;
+  --border-strong: #3f3f46;
+  --text: #fafafa;
+  --text-muted: #a1a1aa;
+  --text-subtle: #8b8b96;
+  --brand: #facc15;
+  --brand-rgb: 250 204 21;
+  --brand-hover: #eab308;
+  --brand-fg: #09090b;
+  --brand-text: #fde047;
+  --brand-subtle: rgba(250, 204, 21, 0.14);
+  color-scheme: dark;
+}
+
+.light {
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --surface-elevated: #f1f5f9;
+  --surface-muted: #e2e8f0;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --text: #0f172a;
+  --text-muted: #475569;
+  --text-subtle: #64748b;
+  --brand: #facc15;
+  --brand-rgb: 250 204 21;
+  --brand-hover: #eab308;
+  --brand-fg: #09090b;
+  --brand-text: #a16207;
+  --brand-subtle: rgba(234, 179, 8, 0.16);
+  color-scheme: light;
+}
+
+@layer base {
+  html {
+    background-color: var(--bg);
+    color: var(--text);
+  }
+
+  body {
+    background-color: var(--bg);
+    color: var(--text);
+    @apply min-h-screen antialiased selection:bg-brand selection:text-brand-fg;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-brand ring-offset-2 ring-offset-[var(--bg)];
+  }
 }
 
 .card {
-  @apply rounded-2xl border border-neutral-800 bg-neutral-900/70 p-5;
+  @apply rounded-card border border-line bg-surface p-5 shadow-card;
 }
 
 .btn {
-  @apply inline-flex items-center justify-center rounded-lg bg-brand px-4 py-2 font-semibold text-neutral-950 transition hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-50;
+  @apply inline-flex items-center justify-center gap-2 rounded-control bg-brand px-4 py-2 text-sm font-semibold text-brand-fg transition hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] disabled:cursor-not-allowed disabled:opacity-50;
 }
 
 .btn-ghost {
-  @apply inline-flex items-center justify-center rounded-lg border border-neutral-700 px-4 py-2 text-neutral-200 transition hover:bg-neutral-800;
+  @apply inline-flex items-center justify-center gap-2 rounded-control border border-line-strong bg-transparent px-4 py-2 text-sm font-medium text-ink transition hover:bg-surface-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] disabled:cursor-not-allowed disabled:opacity-50;
 }
 
 .input {
-  @apply w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 text-neutral-100 outline-none focus:border-brand;
+  @apply w-full rounded-control border border-line-strong bg-canvas px-3 py-2 text-sm text-ink placeholder:text-ink-subtle transition focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
