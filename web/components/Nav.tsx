@@ -12,6 +12,7 @@ const AUTH_LINKS = [
   { href: "/projects", label: "Projects" },
   { href: "/channels", label: "Channels" },
   { href: "/billing", label: "Billing" },
+  { href: "/settings", label: "Settings" },
 ];
 
 const PUBLIC_LINKS = [

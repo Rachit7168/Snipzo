@@ -1,5 +1,15 @@
 export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+export type UserProfile = {
+  id: string;
+  email: string;
+  name: string | null;
+  plan: string;
+  email_verified: boolean;
+  deletion_requested_at: string | null;
+  created_at: string | null;
+};
+
 export type Job = {
   id: string;
   kind: string;

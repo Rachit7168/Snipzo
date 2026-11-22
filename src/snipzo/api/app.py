@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import mimetypes
+import secrets
 import shutil
 import tempfile
 import uuid
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Annotated
 
@@ -27,25 +30,41 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
 from snipzo import __version__
-from snipzo.api import billing, jobs
+from snipzo.api import billing, jobs, mailer
 from snipzo.api.billing_routes import router as billing_router
 from snipzo.api.blobstore import get_blob_store, source_key
 from snipzo.api.deps import Config, CurrentUser, DbSession
 from snipzo.api.schemas import (
     CaptionLineIO,
+    ChangePasswordIn,
     ClipEditIn,
     ClipEditorOut,
     ClipEditResult,
     ClipOut,
     Credentials,
+    DeleteAccountRequestIn,
+    ForgotPasswordIn,
     JobOut,
+    MessageOut,
+    ProfileUpdateIn,
     ProjectOut,
+    ResendVerificationOut,
+    ResetPasswordIn,
     TokenOut,
     UserOut,
+    VerifyEmailIn,
+    VerifyEmailOut,
 )
 from snipzo.api.security import hash_password, sign, unsign, verify_password
 from snipzo.api.settings import ApiSettings, get_api_settings
-from snipzo.api.tables import ClipRow, Job, ProjectRow, TakedownRequest, User
+from snipzo.api.tables import (
+    AccountToken,
+    ClipRow,
+    Job,
+    ProjectRow,
+    TakedownRequest,
+    User,
+)
 from snipzo.api.youtube_routes import router as youtube_router
 from snipzo.errors import SnipzoError
 from snipzo.ingest.service import new_project_id
@@ -55,7 +74,15 @@ log = logging.getLogger(__name__)
 
 
 def user_out(user: User) -> UserOut:
-    return UserOut(id=user.id, email=user.email, name=user.name, plan=user.plan)
+    return UserOut(
+        id=user.id,
+        email=user.email,
+        name=user.name,
+        plan=user.plan,
+        email_verified=bool(user.email_verified),
+        deletion_requested_at=user.deletion_requested_at,
+        created_at=user.created_at,
+    )
 
 
 def issue_token(user: User, settings: ApiSettings) -> TokenOut:
@@ -148,6 +175,83 @@ def enqueue(job_id: str) -> None:
 auth = APIRouter(prefix="/auth", tags=["auth"])
 
 
+def _hash_token(raw: str) -> str:
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _create_account_token(
+    db: DbSession,
+    user: User,
+    *,
+    kind: str,
+    target_email: str,
+    ttl_seconds: int,
+) -> str:
+    raw = secrets.token_urlsafe(32)
+    row = AccountToken(
+        user_id=user.id,
+        kind=kind,
+        target_email=target_email,
+        token_hash=_hash_token(raw),
+        expires_at=datetime.now(UTC) + timedelta(seconds=ttl_seconds),
+    )
+    db.add(row)
+    db.flush()
+    return raw
+
+
+def _consume_account_token(
+    db: DbSession, raw: str, *, kind: str
+) -> tuple[AccountToken, User]:
+    digest = _hash_token(raw.strip())
+    token_row = db.scalar(
+        select(AccountToken).where(
+            AccountToken.token_hash == digest, AccountToken.kind == kind
+        )
+    )
+    if token_row is None or token_row.used_at is not None:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "This link is invalid or has already been used.",
+        )
+    expires = token_row.expires_at
+    if expires.tzinfo is None:
+        expires = expires.replace(tzinfo=UTC)
+    if expires < datetime.now(UTC):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "This link has expired. Request a new one."
+        )
+    user = db.get(User, token_row.user_id)
+    if user is None:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "This link is no longer valid."
+        )
+    token_row.used_at = datetime.now(UTC)
+    return token_row, user
+
+
+def _send_verify_link(
+    db: DbSession, user: User, settings: ApiSettings, *, strict: bool = False
+) -> None:
+    raw = _create_account_token(
+        db,
+        user,
+        kind="verify_email",
+        target_email=user.email,
+        ttl_seconds=settings.email_verify_ttl_seconds,
+    )
+    verify_url = f"{settings.web_app_url.rstrip('/')}/verify-email?token={raw}"
+    try:
+        mailer.send_verification_email(user.email, verify_url, settings)
+    except Exception as exc:
+        log.exception("Failed to send verification email for user %s", user.id)
+        if strict:
+            raise HTTPException(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                "Could not send verification email right now. Please try again.",
+            ) from exc
+
+
 @auth.post("/register", response_model=TokenOut, status_code=201)
 def register(body: Credentials, db: DbSession, settings: Config) -> TokenOut:
     email = body.email.strip().lower()
@@ -158,6 +262,7 @@ def register(body: Credentials, db: DbSession, settings: Config) -> TokenOut:
     user = User(email=email, password_hash=hash_password(body.password), name=body.name)
     db.add(user)
     db.flush()
+    _send_verify_link(db, user, settings, strict=False)
     return issue_token(user, settings)
 
 
@@ -171,6 +276,131 @@ def login(body: Credentials, db: DbSession, settings: Config) -> TokenOut:
 
 @auth.get("/me", response_model=UserOut)
 def me(user: CurrentUser) -> UserOut:
+    return user_out(user)
+
+
+@auth.patch("/me", response_model=UserOut)
+def update_me(
+    body: ProfileUpdateIn, db: DbSession, user: CurrentUser, settings: Config
+) -> UserOut:
+    if body.name is not None:
+        cleaned_name = body.name.strip()
+        user.name = cleaned_name or None
+    if body.email is not None:
+        new_email = body.email.strip().lower()
+        if "@" not in new_email:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Invalid email.")
+        if new_email != user.email:
+            if not body.current_password or not verify_password(
+                body.current_password, user.password_hash
+            ):
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    "Enter your current password to change your email address.",
+                )
+            existing = db.scalar(select(User).where(User.email == new_email))
+            if existing is not None:
+                raise HTTPException(
+                    status.HTTP_409_CONFLICT, "Email already registered."
+                )
+            user.email = new_email
+            user.email_verified = False
+            user.email_verified_at = None
+            db.flush()
+            _send_verify_link(db, user, settings, strict=False)
+    db.flush()
+    return user_out(user)
+
+
+@auth.post("/change-password", response_model=MessageOut)
+def change_password(
+    body: ChangePasswordIn, db: DbSession, user: CurrentUser
+) -> MessageOut:
+    if not verify_password(body.current_password, user.password_hash):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "Current password is incorrect."
+        )
+    if body.current_password == body.new_password:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "Choose a new password different from your current one.",
+        )
+    user.password_hash = hash_password(body.new_password)
+    user.password_changed_at = datetime.now(UTC)
+    db.flush()
+    return MessageOut(message="Password updated.")
+
+
+@auth.post("/verify-email/resend", response_model=ResendVerificationOut)
+def resend_verification(
+    db: DbSession, user: CurrentUser, settings: Config
+) -> ResendVerificationOut:
+    if user.email_verified:
+        return ResendVerificationOut(sent=False, already_verified=True)
+    _send_verify_link(db, user, settings, strict=True)
+    return ResendVerificationOut(sent=True, already_verified=False)
+
+
+@auth.post("/verify-email", response_model=VerifyEmailOut)
+def verify_email(body: VerifyEmailIn, db: DbSession) -> VerifyEmailOut:
+    token_row, user = _consume_account_token(db, body.token, kind="verify_email")
+    if token_row.target_email != user.email:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "This verification link is for an older email address.",
+        )
+    user.email_verified = True
+    user.email_verified_at = datetime.now(UTC)
+    db.flush()
+    return VerifyEmailOut(verified=True, email=user.email)
+
+
+@auth.post("/forgot-password", response_model=MessageOut)
+def forgot_password(
+    body: ForgotPasswordIn, db: DbSession, settings: Config
+) -> MessageOut:
+    email = body.email.strip().lower()
+    user = db.scalar(select(User).where(User.email == email))
+    if user is not None:
+        raw = _create_account_token(
+            db,
+            user,
+            kind="reset_password",
+            target_email=user.email,
+            ttl_seconds=settings.password_reset_ttl_seconds,
+        )
+        reset_url = f"{settings.web_app_url.rstrip('/')}/reset-password?token={raw}"
+        try:
+            mailer.send_password_reset_email(user.email, reset_url, settings)
+        except Exception:
+            log.exception("Failed to send password reset email for user %s", user.id)
+    return MessageOut(
+        message=(
+            "If an account exists for that email, "
+            "we sent password reset instructions."
+        )
+    )
+
+
+@auth.post("/reset-password", response_model=MessageOut)
+def reset_password(body: ResetPasswordIn, db: DbSession) -> MessageOut:
+    _token_row, user = _consume_account_token(db, body.token, kind="reset_password")
+    user.password_hash = hash_password(body.new_password)
+    user.password_changed_at = datetime.now(UTC)
+    db.flush()
+    return MessageOut(message="Password reset. You can sign in with your new password.")
+
+
+@auth.post("/delete-request", response_model=UserOut)
+def request_account_deletion(
+    body: DeleteAccountRequestIn, db: DbSession, user: CurrentUser
+) -> UserOut:
+    if not verify_password(body.password, user.password_hash):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Password is incorrect.")
+    if user.deletion_requested_at is None:
+        user.deletion_requested_at = datetime.now(UTC)
+    log.info("Account deletion requested for user %s", user.id)
+    db.flush()
     return user_out(user)
 
 
