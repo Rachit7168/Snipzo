@@ -27,7 +27,7 @@ export default function AppError({
       </p>
       <div className="mt-6 flex flex-wrap justify-center gap-3">
         <Button onClick={reset}>Try again</Button>
-        <Link href="/" className={buttonClasses({ variant: "ghost" })}>
+        <Link href="/projects" className={buttonClasses({ variant: "ghost" })}>
           Back to projects
         </Link>
       </div>

@@ -62,7 +62,7 @@ export default function ProjectPage() {
     try {
       await apiFetch(`/projects/${project.id}`, token, { method: "DELETE" });
       showToast({ title: "Project deleted", message: "Removed source and clips.", tone: "success" });
-      router.push("/");
+      router.push("/projects");
     } catch (err) {
       const mapped = mapApiError(err, "Could not delete project.");
       showToast({ title: mapped.title, message: mapped.message, tone: "error" });
@@ -78,7 +78,7 @@ export default function ProjectPage() {
           tone="error"
           title="Couldn't open this project"
           action={
-            <Link href="/" className={buttonClasses({ variant: "primary", size: "md" })}>
+            <Link href="/projects" className={buttonClasses({ variant: "primary", size: "md" })}>
               Back to projects
             </Link>
           }
@@ -111,7 +111,7 @@ export default function ProjectPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 space-y-2">
-          <Link href="/" className="inline-block text-sm text-ink-muted hover:text-ink">
+          <Link href="/projects" className="inline-block text-sm text-ink-muted hover:text-ink">
             ← Projects
           </Link>
           <div className="flex items-start gap-3">
@@ -189,7 +189,7 @@ export default function ProjectPage() {
           title="We couldn't finish processing this video"
           action={
             <>
-              <Link href="/" className={buttonClasses({ variant: "primary", size: "md" })}>
+              <Link href="/projects" className={buttonClasses({ variant: "primary", size: "md" })}>
                 Try another file
               </Link>
               <Link href="/takedown" className={buttonClasses({ variant: "ghost", size: "md" })}>

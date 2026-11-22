@@ -43,7 +43,7 @@ function LoginForm() {
         redirect: false,
       });
       if (result?.ok) {
-        window.location.assign(params.get("callbackUrl") || "/");
+        window.location.assign(params.get("callbackUrl") || "/projects");
         return;
       }
       if (result?.error === "SERVICE_UNAVAILABLE") {

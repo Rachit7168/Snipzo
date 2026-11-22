@@ -1,15 +1,54 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
+import Analytics from "@/components/Analytics";
 import Footer from "@/components/Footer";
 import Nav from "@/components/Nav";
 import Providers from "@/components/Providers";
+import { getSiteUrl } from "@/lib/site";
 
 import "./globals.css";
 
+const siteUrl = getSiteUrl();
+
 export const metadata: Metadata = {
-  title: "Snipzo: long videos to Shorts",
-  description: "Upload a long-form video and get ready-to-post vertical Shorts.",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: "Snipzo — Turn long videos into vertical Shorts",
+    template: "%s · Snipzo",
+  },
+  description:
+    "Upload a long-form video or paste a YouTube URL and get ready-to-post 9:16 vertical Shorts with captions and hook titles.",
+  keywords: [
+    "youtube shorts generator",
+    "ai video clipping",
+    "long video to shorts",
+    "vertical video captions",
+    "podcast clips",
+  ],
+  openGraph: {
+    type: "website",
+    siteName: "Snipzo",
+    title: "Snipzo — Turn long videos into vertical Shorts",
+    description:
+      "AI highlight detection, speaker-centered 9:16 reframing, burned-in captions, and direct YouTube Shorts publishing.",
+    url: "/",
+    images: [
+      {
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: "Snipzo — Long videos to vertical Shorts",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Snipzo — Turn long videos into vertical Shorts",
+    description:
+      "Upload a long-form video or paste a YouTube URL and get ready-to-post vertical Shorts.",
+    images: ["/opengraph-image"],
+  },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -29,6 +68,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           </main>
           <Footer />
         </Providers>
+        <Analytics />
       </body>
     </html>
   );

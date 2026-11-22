@@ -9,9 +9,15 @@ import { useTheme } from "@/components/ThemeProvider";
 import { buttonClasses } from "@/components/ui";
 
 const AUTH_LINKS = [
-  { href: "/", label: "Projects" },
+  { href: "/projects", label: "Projects" },
   { href: "/channels", label: "Channels" },
   { href: "/billing", label: "Billing" },
+];
+
+const PUBLIC_LINKS = [
+  { href: "/#how-it-works", label: "How it works" },
+  { href: "/#features", label: "Features" },
+  { href: "/pricing", label: "Pricing" },
 ];
 
 export default function Nav() {
@@ -25,7 +31,7 @@ export default function Nav() {
   }, [pathname]);
 
   function isActive(href: string) {
-    if (href === "/") return pathname === "/" || pathname.startsWith("/projects");
+    if (href === "/projects") return pathname === "/projects" || pathname.startsWith("/projects/");
     return pathname.startsWith(href);
   }
 
@@ -33,7 +39,7 @@ export default function Nav() {
     <header className="sticky top-0 z-40 border-b border-line bg-canvas/90 backdrop-blur-md">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3.5 sm:px-6">
         <Link
-          href="/"
+          href={session ? "/projects" : "/"}
           className="flex items-center gap-2 text-xl font-black tracking-tight text-ink"
         >
           <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-brand text-xs font-black text-brand-fg">
@@ -89,6 +95,26 @@ export default function Nav() {
             </>
           ) : (
             <>
+              <div className="flex items-center gap-1">
+                {PUBLIC_LINKS.map((item) => {
+                  const active = item.href === "/pricing" && pathname === "/pricing";
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      aria-current={active ? "page" : undefined}
+                      className={`rounded-lg px-3 py-1.5 font-medium transition ${
+                        active
+                          ? "bg-surface-elevated text-ink"
+                          : "text-ink-muted hover:text-ink"
+                      }`}
+                    >
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </div>
+              <div className="h-4 w-px bg-line" aria-hidden="true" />
               <button
                 type="button"
                 onClick={toggleTheme}
@@ -101,7 +127,7 @@ export default function Nav() {
                 Sign in
               </Link>
               <Link href="/register" className={buttonClasses({ variant: "primary", size: "sm" })}>
-                Create account
+                Get started free
               </Link>
             </>
           )}
@@ -181,6 +207,17 @@ export default function Nav() {
               </>
             ) : (
               <>
+                {PUBLIC_LINKS.map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMenuOpen(false)}
+                    className="rounded-lg px-3 py-2 font-medium text-ink-muted hover:bg-surface-elevated hover:text-ink"
+                  >
+                    {item.label}
+                  </Link>
+                ))}
+                <div className="my-1 border-t border-line" />
                 <Link
                   href="/login"
                   className="rounded-lg px-3 py-2 font-medium text-ink-muted hover:bg-surface-elevated hover:text-ink"
@@ -191,7 +228,7 @@ export default function Nav() {
                   href="/register"
                   className={buttonClasses({ variant: "primary", size: "md", fullWidth: true })}
                 >
-                  Create account
+                  Get started free
                 </Link>
                 <button
                   type="button"
