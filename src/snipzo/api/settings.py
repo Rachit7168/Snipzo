@@ -118,6 +118,23 @@ class ApiSettings(BaseSettings):
     stripe_price_creator: str | None = None
     stripe_price_pro: str | None = None
 
+    email_backend: Literal["console", "smtp", "resend"] = Field(
+        default="console",
+        description="Transactional email backend: console (logs), smtp, or resend.",
+    )
+    email_from: str = Field(
+        default="Snipzo <no-reply@snipzo.app>",
+        description="Sender header for verification and password reset emails.",
+    )
+    smtp_host: str | None = None
+    smtp_port: int = Field(default=587, ge=1, le=65535)
+    smtp_user: str | None = None
+    smtp_password: str | None = None
+    smtp_use_tls: bool = True
+    resend_api_key: str | None = None
+    email_verify_ttl_seconds: int = Field(default=24 * 3600, ge=60)
+    password_reset_ttl_seconds: int = Field(default=3600, ge=60)
+
     def cors_origin_list(self) -> list[str]:
         return [item.strip() for item in self.cors_origins.split(",") if item.strip()]
 

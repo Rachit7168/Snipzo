@@ -15,7 +15,8 @@ import {
   Card,
   ProjectListSkeleton,
 } from "@/components/ui";
-import { apiFetch, formatSeconds, type BillingUsage, type Project } from "@/lib/api";
+import { apiFetch, formatSeconds, type BillingUsage, type Project, type UserProfile } from "@/lib/api";
+import { useToast } from "@/components/Toast";
 import { mapApiError } from "@/lib/errors";
 
 const WELCOME_DISMISSED_KEY = "snipzo_welcome_dismissed";
@@ -26,7 +27,10 @@ export default function DashboardClient() {
   const token = session?.accessToken;
   const uploadSectionRef = useRef<HTMLDivElement | null>(null);
   const [projects, setProjects] = useState<Project[] | null>(null);
+  const { showToast } = useToast();
   const [usage, setUsage] = useState<BillingUsage | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [resendingVerify, setResendingVerify] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [welcomeOpen, setWelcomeOpen] = useState(false);
   const [checklistDismissed, setChecklistDismissed] = useState(true);
@@ -67,6 +71,13 @@ export default function DashboardClient() {
       .catch(() => {
         // optional usage summary
       });
+    apiFetch<UserProfile>("/auth/me", token)
+      .then((me) => {
+        if (active) setProfile(me);
+      })
+      .catch(() => {
+        // optional profile banner
+      });
     const timer = setInterval(load, 5000);
     return () => {
       active = false;
@@ -85,6 +96,36 @@ export default function DashboardClient() {
       }
     } catch {
       // ignore storage errors
+    }
+  }
+
+  async function resendVerification() {
+    if (!token || resendingVerify) return;
+    setResendingVerify(true);
+    try {
+      const res = await apiFetch<{ sent: boolean; already_verified: boolean }>(
+        "/auth/verify-email/resend",
+        token,
+        { method: "POST" },
+      );
+      if (res.already_verified) {
+        setProfile((prev) => (prev ? { ...prev, email_verified: true } : prev));
+        showToast({ title: "Already verified", message: "Your email is verified.", tone: "success" });
+      } else {
+        showToast({
+          title: "Verification email sent",
+          message: "Check your inbox (or server logs in dev) for the link.",
+          tone: "success",
+        });
+      }
+    } catch (err) {
+      showToast({
+        title: "Could not send verification",
+        message: mapApiError(err, "Please try again in a moment.").message,
+        tone: "error",
+      });
+    } finally {
+      setResendingVerify(false);
     }
   }
 
@@ -183,6 +224,30 @@ export default function DashboardClient() {
         </div>
 
         <section className="min-w-0 space-y-4" aria-labelledby="projects-heading">
+          {profile && !profile.email_verified && (
+            <Alert tone="warning" title="Verify your email address">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <span>
+                  Confirm <strong className="text-ink">{profile.email}</strong> so you can recover
+                  your account anytime. Uploads still work right away.
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    loading={resendingVerify}
+                    onClick={resendVerification}
+                  >
+                    Resend email
+                  </Button>
+                  <Link href="/settings" className="text-xs font-medium text-ink underline">
+                    Settings
+                  </Link>
+                </div>
+              </div>
+            </Alert>
+          )}
           {showChecklist && (
             <Card className="space-y-3 border-brand/30 bg-surface/90">
               <div className="flex items-start justify-between gap-3">

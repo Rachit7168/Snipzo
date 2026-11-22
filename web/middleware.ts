@@ -9,5 +9,7 @@ export const config = {
     "/billing/:path*",
     "/channels",
     "/channels/:path*",
+    "/settings",
+    "/settings/:path*",
   ],
 };

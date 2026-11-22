@@ -81,16 +81,28 @@ function LoginForm() {
           error={fieldErrors.email}
         />
 
-        <Input
-          id="login-password"
-          name="password"
-          type="password"
-          label="Password"
-          placeholder="Password"
-          autoComplete="current-password"
-          required
-          error={fieldErrors.password}
-        />
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <label htmlFor="login-password" className="block text-sm font-medium text-ink">
+              Password
+            </label>
+            <Link
+              href="/forgot-password"
+              className="text-xs font-medium text-brand-text hover:underline"
+            >
+              Forgot password?
+            </Link>
+          </div>
+          <Input
+            id="login-password"
+            name="password"
+            type="password"
+            placeholder="Password"
+            autoComplete="current-password"
+            required
+            error={fieldErrors.password}
+          />
+        </div>
 
         {formError && <Alert tone="error">{formError}</Alert>}
 

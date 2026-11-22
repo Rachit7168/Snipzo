@@ -18,6 +18,53 @@ class UserOut(BaseModel):
     email: str
     name: str | None = None
     plan: str
+    email_verified: bool = False
+    deletion_requested_at: datetime | None = None
+    created_at: datetime | None = None
+
+
+class ProfileUpdateIn(BaseModel):
+    name: str | None = Field(default=None, max_length=200)
+    email: str | None = Field(default=None, min_length=3, max_length=320)
+    current_password: str | None = Field(default=None, max_length=200)
+
+
+class ChangePasswordIn(BaseModel):
+    current_password: str = Field(min_length=1, max_length=200)
+    new_password: str = Field(min_length=8, max_length=200)
+
+
+class ForgotPasswordIn(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+
+
+class ResetPasswordIn(BaseModel):
+    token: str = Field(min_length=8, max_length=500)
+    new_password: str = Field(min_length=8, max_length=200)
+
+
+class VerifyEmailIn(BaseModel):
+    token: str = Field(min_length=8, max_length=500)
+
+
+class DeleteAccountRequestIn(BaseModel):
+    password: str = Field(min_length=1, max_length=200)
+    reason: str | None = Field(default=None, max_length=1000)
+
+
+class MessageOut(BaseModel):
+    ok: bool = True
+    message: str
+
+
+class ResendVerificationOut(BaseModel):
+    sent: bool
+    already_verified: bool = False
+
+
+class VerifyEmailOut(BaseModel):
+    verified: bool
+    email: str
 
 
 class TokenOut(BaseModel):
