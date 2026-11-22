@@ -14,11 +14,19 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className="dark">
       <body>
         <Providers>
+          <a
+            href="#main-content"
+            className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-control focus:bg-brand focus:px-3 focus:py-2 focus:text-sm focus:font-semibold focus:text-brand-fg"
+          >
+            Skip to content
+          </a>
           <Nav />
-          <main className="mx-auto min-h-[70vh] max-w-6xl px-6 py-8">{children}</main>
+          <main id="main-content" className="mx-auto min-h-[72vh] max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+            {children}
+          </main>
           <Footer />
         </Providers>
       </body>

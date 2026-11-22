@@ -130,13 +130,15 @@ def check_can_start_video(session: Session, user: User, settings: ApiSettings) -
     plan = plan_for(user, settings)
     usage = usage_for(session, user.id)
     if usage.videos >= plan.videos_per_month:
+        unit = "video" if plan.videos_per_month == 1 else "videos"
         raise SnipzoError(
-            f"Your {plan.name} plan includes {plan.videos_per_month} videos per month. "
+            f"Your {plan.name} plan includes {plan.videos_per_month} {unit} per month. "
             "Upgrade to process more."
         )
     if usage.minutes >= plan.minutes_per_month:
+        unit = "minute" if plan.minutes_per_month == 1 else "minutes"
         raise SnipzoError(
-            f"You've used your {plan.minutes_per_month} minutes this month. "
+            f"You've used your {plan.minutes_per_month} {unit} this month. "
             "Upgrade to process more."
         )
 

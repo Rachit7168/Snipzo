@@ -240,3 +240,31 @@ def test_stripe_checkout_webhook_upgrade_and_cancel(
     assert res2.status_code == 200
     assert res2.json()["status"] == "downgraded"
     assert client.get("/billing/me", headers=headers).json()["plan"]["id"] == "free"
+
+
+def test_free_tier_singular_video_pluralization(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    sample_video_factory: Callable[..., Path],
+) -> None:
+    from snipzo.api.settings import get_api_settings
+
+    monkeypatch.setenv("SNIPZO_FREE_VIDEOS_PER_MONTH", "1")
+    get_api_settings.cache_clear()
+    try:
+        headers = register(client, "one@example.com")
+        video = sample_video_factory(name="one.mp4", duration=4.0)
+        created = upload(client, headers, video)
+        assert created["status"] == "complete"
+        with video.open("rb") as handle:
+            second = client.post(
+                "/projects",
+                headers=headers,
+                data={"rights_confirmed": "true"},
+                files={"file": ("one.mp4", handle, "video/mp4")},
+            )
+        assert second.status_code == 402
+        assert "1 video per month" in second.json()["detail"]
+    finally:
+        monkeypatch.undo()
+        get_api_settings.cache_clear()

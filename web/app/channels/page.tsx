@@ -5,6 +5,15 @@ import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useState } from "react";
 
 import { useToast } from "@/components/Toast";
+import {
+  Alert,
+  Button,
+  Card,
+  CardGridSkeleton,
+  Checkbox,
+  EmptyState,
+  Skeleton,
+} from "@/components/ui";
 import { apiFetch, type OwnedVideo, type YouTubeStatus } from "@/lib/api";
 import { mapApiError } from "@/lib/errors";
 
@@ -82,72 +91,83 @@ export default function ChannelsPage() {
     }
   }
 
-  if (!token || !status) return <p className="text-neutral-400">Loading...</p>;
+  if (!token || !status) {
+    return (
+      <div className="space-y-6" aria-busy="true" aria-label="Loading channels">
+        <Skeleton className="h-8 w-40" />
+        <CardGridSkeleton count={2} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Channels</h1>
-          <p className="text-sm text-neutral-400">
+          <h1 className="text-2xl font-bold tracking-tight text-ink">Channels</h1>
+          <p className="text-sm text-ink-muted">
             Connect your YouTube channel to publish Shorts directly and import videos you own.
           </p>
         </div>
-        {status.configured && (
-          <button className="btn" onClick={connect}>
-            Connect YouTube
-          </button>
-        )}
+        {status.configured && <Button onClick={connect}>Connect YouTube</Button>}
       </div>
+
       {!status.configured && (
-        <p className="card text-sm text-neutral-300">
+        <Alert tone="info">
           YouTube publishing is not available yet. You can still paste any YouTube video link on the dashboard to make Shorts.
-        </p>
+        </Alert>
       )}
-      {message && <p className="text-sm text-emerald-300">{message}</p>}
-      {error && (
-        <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-          {error}
-        </div>
-      )}
+      {message && <Alert tone="success">{message}</Alert>}
+      {error && <Alert tone="error">{error}</Alert>}
+
       {status.channels.length === 0 ? (
-        <p className="card text-neutral-400">No channels connected yet.</p>
+        <EmptyState
+          title="No channels connected yet"
+          description={
+            status.configured
+              ? "Connect your YouTube channel to import owned videos and publish Shorts in one click."
+              : "Direct YouTube publishing will appear here once channel connections are enabled."
+          }
+          action={status.configured ? <Button onClick={connect}>Connect YouTube</Button> : undefined}
+        />
       ) : (
         status.channels.map((channel) => (
-          <section key={channel.id} className="card space-y-4">
-            <div className="flex items-center justify-between">
+          <Card key={channel.id} className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h2 className="font-semibold">{channel.title || channel.external_id}</h2>
-                <p className="text-xs text-neutral-500">YouTube · {channel.external_id}</p>
+                <h2 className="font-semibold text-ink">{channel.title || channel.external_id}</h2>
+                <p className="text-xs text-ink-subtle">YouTube · {channel.external_id}</p>
               </div>
-              <button className="btn-ghost py-1 text-sm" onClick={() => disconnect(channel.id)}>
+              <Button variant="ghost" size="sm" onClick={() => disconnect(channel.id)}>
                 Disconnect
-              </button>
+              </Button>
             </div>
-            <label className="flex items-center gap-2 text-sm text-neutral-300">
-              <input type="checkbox" className="accent-yellow-400" checked={rights} onChange={(e) => setRights(e.target.checked)} />
-              I own or have rights to this content.
-            </label>
+            <Checkbox
+              checked={rights}
+              onChange={(e) => setRights(e.target.checked)}
+              label="I own or have rights to this content."
+            />
             {!status.import_enabled && (
-              <p className="text-xs text-neutral-500">
+              <p className="text-xs text-ink-subtle">
                 Channel import isn&apos;t available right now. Upload the original file instead.
               </p>
             )}
             <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {(videos[channel.id] ?? []).map((video) => (
-                <li key={video.id} className="rounded-xl border border-neutral-800 p-3">
-                  <p className="line-clamp-2 text-sm font-medium">{video.title}</p>
-                  <button
-                    className="btn mt-2 w-full py-1 text-sm"
+                <li key={video.id} className="flex flex-col justify-between gap-3 rounded-xl border border-line p-3">
+                  <p className="line-clamp-2 text-sm font-medium text-ink">{video.title}</p>
+                  <Button
+                    size="sm"
+                    fullWidth
                     disabled={!rights}
                     onClick={() => importVideo(channel.id, video.id)}
                   >
                     Import
-                  </button>
+                  </Button>
                 </li>
               ))}
             </ul>
-          </section>
+          </Card>
         ))
       )}
     </div>

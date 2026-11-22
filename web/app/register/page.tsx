@@ -5,6 +5,7 @@ import { signIn } from "next-auth/react";
 import { useState, type FormEvent } from "react";
 
 import { useToast } from "@/components/Toast";
+import { Alert, Button, Card, Input } from "@/components/ui";
 import { apiFetch } from "@/lib/api";
 import { mapApiError } from "@/lib/errors";
 
@@ -49,88 +50,57 @@ export default function RegisterPage() {
   }
 
   return (
-    <form onSubmit={onSubmit} noValidate className="card mx-auto mt-10 max-w-md space-y-4">
-      <h1 className="text-2xl font-bold">Create your account</h1>
+    <Card className="mx-auto mt-6 max-w-md sm:mt-10">
+      <form onSubmit={onSubmit} noValidate className="space-y-4">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-bold tracking-tight text-ink">Create your account</h1>
+          <p className="text-sm text-ink-muted">Start turning long videos into Shorts in minutes.</p>
+        </div>
 
-      <div className="space-y-1">
-        <label htmlFor="register-name" className="block text-xs font-medium text-neutral-300">
-          Name (optional)
-        </label>
-        <input
+        <Input
           id="register-name"
-          className="input"
           name="name"
+          label="Name (optional)"
           placeholder="Your name"
-          aria-invalid={Boolean(fieldErrors.name)}
-          aria-describedby={fieldErrors.name ? "register-name-error" : undefined}
+          error={fieldErrors.name}
         />
-        {fieldErrors.name && (
-          <p id="register-name-error" className="text-xs text-red-400">
-            {fieldErrors.name}
-          </p>
-        )}
-      </div>
 
-      <div className="space-y-1">
-        <label htmlFor="register-email" className="block text-xs font-medium text-neutral-300">
-          Email
-        </label>
-        <input
+        <Input
           id="register-email"
-          className="input"
           name="email"
           type="email"
+          label="Email"
           placeholder="you@example.com"
           autoComplete="email"
           required
-          aria-invalid={Boolean(fieldErrors.email)}
-          aria-describedby={fieldErrors.email ? "register-email-error" : undefined}
+          error={fieldErrors.email}
         />
-        {fieldErrors.email && (
-          <p id="register-email-error" className="text-xs text-red-400">
-            {fieldErrors.email}
-          </p>
-        )}
-      </div>
 
-      <div className="space-y-1">
-        <label htmlFor="register-password" className="block text-xs font-medium text-neutral-300">
-          Password
-        </label>
-        <input
+        <Input
           id="register-password"
-          className="input"
           name="password"
           type="password"
+          label="Password"
           placeholder="8+ characters"
           autoComplete="new-password"
           minLength={8}
           required
-          aria-invalid={Boolean(fieldErrors.password)}
-          aria-describedby={fieldErrors.password ? "register-password-error" : undefined}
+          error={fieldErrors.password}
         />
-        {fieldErrors.password && (
-          <p id="register-password-error" className="text-xs text-red-400">
-            {fieldErrors.password}
-          </p>
-        )}
-      </div>
 
-      {formError && (
-        <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-          {formError}
-        </div>
-      )}
+        {formError && <Alert tone="error">{formError}</Alert>}
 
-      <button className="btn w-full" disabled={busy}>
-        {busy ? "Creating..." : "Create account"}
-      </button>
-      <p className="text-sm text-neutral-400">
-        Already have an account?{" "}
-        <Link className="text-brand" href="/login">
-          Sign in
-        </Link>
-      </p>
-    </form>
+        <Button type="submit" fullWidth loading={busy}>
+          {busy ? "Creating..." : "Create account"}
+        </Button>
+
+        <p className="text-sm text-ink-muted">
+          Already have an account?{" "}
+          <Link className="font-medium text-brand-text hover:underline" href="/login">
+            Sign in
+          </Link>
+        </p>
+      </form>
+    </Card>
   );
 }

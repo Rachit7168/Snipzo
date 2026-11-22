@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 
 import { useToast } from "@/components/Toast";
+import { Alert, Button, Card, Checkbox, Input, Select } from "@/components/ui";
 import { apiFetch, type Clip, type Publication, type YouTubeStatus } from "@/lib/api";
 import { mapApiError, sanitizeJobErrorText } from "@/lib/errors";
 
@@ -69,73 +70,66 @@ export default function PublishPanel({
     }
   }
 
-  if (!status) return null;
-  if (!status.configured) return null;
+  if (!status || !status.configured) return null;
   if (status.channels.length === 0) {
     return (
-      <p className="card text-sm text-neutral-400">
-        <Link href="/channels" className="text-brand">
+      <Card className="text-sm text-ink-muted">
+        <Link href="/channels" className="font-medium text-brand-text hover:underline">
           Connect a YouTube channel
         </Link>{" "}
         to publish these Shorts directly.
-      </p>
+      </Card>
     );
   }
 
   return (
-    <section className="card space-y-4">
-      <h2 className="text-lg font-semibold">Publish to YouTube</h2>
+    <Card className="space-y-4">
+      <h2 className="text-lg font-bold tracking-tight text-ink">Publish to YouTube</h2>
       <form onSubmit={onSubmit} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <select name="clip_id" aria-label="Clip" className="input">
+        <Select name="clip_id" label="Clip">
           {clips.map((clip) => (
             <option key={clip.clip_id} value={clip.clip_id}>
               {clip.clip_id}: {clip.title || clip.hook_title}
             </option>
           ))}
-        </select>
-        <select name="channel_id" aria-label="Channel" className="input">
+        </Select>
+        <Select name="channel_id" label="Channel">
           {status.channels.map((channel) => (
             <option key={channel.id} value={channel.id}>
               {channel.title || channel.external_id}
             </option>
           ))}
-        </select>
-        <select name="privacy_status" aria-label="Visibility" className="input" defaultValue="private">
+        </Select>
+        <Select name="privacy_status" label="Visibility" defaultValue="private">
           <option value="private">Private</option>
           <option value="unlisted">Unlisted</option>
           <option value="public">Public</option>
-        </select>
-        <input name="publish_at" type="datetime-local" className="input" aria-label="Schedule (optional)" />
-        <label className="flex items-center gap-2 text-sm text-neutral-300 sm:col-span-2">
-          <input type="checkbox" name="synthetic" className="accent-yellow-400" />
-          Contains realistic altered or synthetic content (YouTube disclosure)
-        </label>
-        <label className="flex items-center gap-2 text-sm text-neutral-300">
-          <input type="checkbox" name="kids" className="accent-yellow-400" />
-          Made for kids
-        </label>
-        <label className="flex items-center gap-2 text-sm text-neutral-300">
-          <input type="checkbox" name="rights" className="accent-yellow-400" required />
-          I own or have rights to publish this
-        </label>
-        <button className="btn sm:col-span-2 lg:col-span-4" disabled={busy}>
-          {busy ? "Publishing..." : "Publish"}
-        </button>
-      </form>
-      {error && (
-        <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-          {error}
+        </Select>
+        <Input name="publish_at" type="datetime-local" label="Schedule (optional)" />
+
+        <div className="sm:col-span-2">
+          <Checkbox
+            name="synthetic"
+            label="Contains realistic altered or synthetic content (YouTube disclosure)"
+          />
         </div>
-      )}
+        <Checkbox name="kids" label="Made for kids" />
+        <Checkbox name="rights" required label="I own or have rights to publish this" />
+
+        <Button type="submit" loading={busy} className="sm:col-span-2 lg:col-span-4">
+          {busy ? "Publishing..." : "Publish"}
+        </Button>
+      </form>
+      {error && <Alert tone="error">{error}</Alert>}
       {publications.length > 0 && (
         <ul className="space-y-1 text-sm">
           {publications.map((pub) => (
-            <li key={pub.id} className="flex flex-wrap gap-2 text-neutral-300">
-              <span className="font-medium">{pub.clip_id}</span>
+            <li key={pub.id} className="flex flex-wrap gap-2 text-ink-muted">
+              <span className="font-medium text-ink">{pub.clip_id}</span>
               <span>{pub.status}</span>
               {pub.publish_at && <span>· scheduled {new Date(pub.publish_at).toLocaleString()}</span>}
               {pub.url && (
-                <a className="text-brand" href={pub.url} target="_blank" rel="noreferrer">
+                <a className="text-brand-text hover:underline" href={pub.url} target="_blank" rel="noreferrer">
                   {pub.url}
                 </a>
               )}
@@ -144,6 +138,6 @@ export default function PublishPanel({
           ))}
         </ul>
       )}
-    </section>
+    </Card>
   );
 }

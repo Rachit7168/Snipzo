@@ -4,6 +4,14 @@ import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useState } from "react";
 
 import { useToast } from "@/components/Toast";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  CardGridSkeleton,
+  Skeleton,
+} from "@/components/ui";
 import { apiFetch, type BillingUsage, type PlanInfo } from "@/lib/api";
 import { mapApiError } from "@/lib/errors";
 
@@ -73,13 +81,18 @@ export default function BillingPage() {
   }
 
   if (error && !usage) {
+    return <Alert tone="error">{error}</Alert>;
+  }
+
+  if (!token || !usage) {
     return (
-      <div role="alert" className="card border-red-500/30 text-sm text-red-300">
-        {error}
+      <div className="space-y-6" aria-busy="true" aria-label="Loading billing">
+        <Skeleton className="h-8 w-44" />
+        <Skeleton className="h-24 w-full" />
+        <CardGridSkeleton count={3} />
       </div>
     );
   }
-  if (!token || !usage) return <p className="text-neutral-400">Loading billing...</p>;
 
   const videoPct = Math.min(100, Math.round((usage.videos_used / usage.plan.videos_per_month) * 100));
   const minPct = Math.min(100, Math.round((usage.minutes_used / usage.plan.minutes_per_month) * 100));
@@ -88,74 +101,71 @@ export default function BillingPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Billing &amp; usage</h1>
-          <p className="text-sm text-neutral-400">
-            Current plan: <span className="font-semibold text-white">{usage.plan.name}</span> (
+          <h1 className="text-2xl font-bold tracking-tight text-ink">Billing &amp; usage</h1>
+          <p className="text-sm text-ink-muted">
+            Current plan: <span className="font-semibold text-ink">{usage.plan.name}</span> (
             {usage.plan.max_resolution}
             {usage.plan.watermark ? ", watermarked" : ", no watermark"})
           </p>
         </div>
         {usage.has_subscription && usage.billing_configured && (
-          <button className="btn-ghost" onClick={openPortal} disabled={busyPlan === "portal"}>
+          <Button variant="ghost" onClick={openPortal} loading={busyPlan === "portal"}>
             {busyPlan === "portal" ? "Opening..." : "Manage subscription"}
-          </button>
+          </Button>
         )}
       </div>
 
-      {notice && <p className="text-sm text-emerald-300">{notice}</p>}
-      {error && (
-        <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-          {error}
-        </div>
-      )}
+      {notice && <Alert tone="success">{notice}</Alert>}
+      {error && <Alert tone="error">{error}</Alert>}
       {!usage.billing_configured && (
-        <p className="card text-sm text-neutral-300">
+        <Alert tone="info">
           Upgrades are temporarily unavailable. You can continue using your current {usage.plan.name} plan.
-        </p>
+        </Alert>
       )}
 
-      <section className="card grid gap-4 sm:grid-cols-2">
+      <Card className="grid gap-5 sm:grid-cols-2">
         <div className="space-y-2">
-          <div className="flex justify-between text-sm">
+          <div className="flex justify-between text-sm text-ink">
             <span>Videos this month</span>
-            <span>
+            <span className="font-medium">
               {usage.videos_used} / {usage.plan.videos_per_month}
             </span>
           </div>
-          <div className="h-2 overflow-hidden rounded-full bg-neutral-800">
+          <div className="h-2 overflow-hidden rounded-full bg-surface-muted">
             <div className="h-full bg-brand" style={{ width: `${videoPct}%` }} />
           </div>
         </div>
         <div className="space-y-2">
-          <div className="flex justify-between text-sm">
+          <div className="flex justify-between text-sm text-ink">
             <span>Minutes processed</span>
-            <span>
+            <span className="font-medium">
               {usage.minutes_used.toFixed(1)} / {usage.plan.minutes_per_month}
             </span>
           </div>
-          <div className="h-2 overflow-hidden rounded-full bg-neutral-800">
+          <div className="h-2 overflow-hidden rounded-full bg-surface-muted">
             <div className="h-full bg-brand" style={{ width: `${minPct}%` }} />
           </div>
         </div>
-      </section>
+      </Card>
 
       <section className="grid gap-5 md:grid-cols-3">
         {plans.map((plan) => {
           const isCurrent = plan.id === usage.plan.id;
           const showUpgrade = !isCurrent && plan.id !== "free" && usage.billing_configured && plan.purchasable;
           return (
-            <div
-              key={plan.id}
-              className={`card flex flex-col gap-4 ${isCurrent ? "border-brand" : ""}`}
-            >
-              <div>
-                <h2 className="text-lg font-bold">{plan.name}</h2>
-                <p className="mt-1 text-3xl font-black">
-                  ${plan.price_usd}
-                  <span className="text-sm font-normal text-neutral-400">/mo</span>
-                </p>
+            <Card key={plan.id} highlight={isCurrent} className="flex flex-col gap-4">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <h2 className="text-lg font-bold text-ink">{plan.name}</h2>
+                  <p className="mt-1 text-3xl font-black text-ink">
+                    ${plan.price_usd}
+                    <span className="text-sm font-normal text-ink-muted">/mo</span>
+                  </p>
+                </div>
+                {isCurrent && <Badge tone="brand">Current</Badge>}
+                {!isCurrent && plan.id === "creator" && <Badge tone="neutral">Popular</Badge>}
               </div>
-              <ul className="space-y-1 text-sm text-neutral-300">
+              <ul className="space-y-1.5 text-sm text-ink-muted">
                 <li>
                   {plan.videos_per_month} {plan.videos_per_month === 1 ? "video" : "videos"} / month
                 </li>
@@ -168,16 +178,17 @@ export default function BillingPage() {
                 {isCurrent ? (
                   <span className="btn-ghost w-full cursor-default text-center">Current plan</span>
                 ) : showUpgrade ? (
-                  <button
-                    className="btn w-full"
+                  <Button
+                    fullWidth
+                    loading={busyPlan === plan.id}
                     disabled={busyPlan !== null}
                     onClick={() => startCheckout(plan.id as "creator" | "pro")}
                   >
                     {busyPlan === plan.id ? "Redirecting..." : `Upgrade to ${plan.name}`}
-                  </button>
+                  </Button>
                 ) : null}
               </div>
-            </div>
+            </Card>
           );
         })}
       </section>
