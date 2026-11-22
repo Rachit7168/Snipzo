@@ -224,3 +224,6 @@ __marimo__/
 
 # Local pipeline working directory
 /data/
+
+# Next.js web app sources (overrides the Python lib/ ignore above)
+!web/lib/
