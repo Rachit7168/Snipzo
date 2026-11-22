@@ -96,7 +96,11 @@ export default function ProjectPage() {
           <h2 className="text-lg font-semibold">{project.clips.length} Shorts</h2>
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {project.clips.map((clip) => (
-              <ClipCard key={clip.clip_id} clip={clip} />
+              <ClipCard
+                key={clip.clip_id}
+                clip={clip}
+                editHref={`/projects/${project.id}/clips/${clip.clip_id}`}
+              />
             ))}
           </div>
         </section>

@@ -244,6 +244,41 @@ def run_highlights_and_render(job_id: str) -> bool:
         return False
 
 
+def run_rerender(job_id: str) -> bool:
+    """Re-render one edited clip (CPU queue) and publish a new render version."""
+    from snipzo.edit import rerender_clip
+
+    settings = pipeline_settings()
+    store = blob_store()
+    with session_scope() as session:
+        job, project = _load_job(session, job_id)
+        project_id = project.id
+        clip_id = str(job.payload.get("clip_id", ""))
+        reframe = bool(job.payload.get("reframe", False))
+        job.status = "running"
+    try:
+        _update_job(job_id, stage="render", message=f"Re-rendering {clip_id}...")
+        local = get_storage(settings.work_dir)
+        project_model = resolve_project(project_id, local)
+        if not project_model.source_path.is_file():
+            with session_scope() as session:
+                row = session.get(ProjectRow, project_id)
+                key = row.source_key if row and row.source_deleted_at is None else None
+            if not key:
+                raise SnipzoError(
+                    "The source video was deleted after the retention window."
+                )
+            store.get_file(key, project_model.source_path)
+        rerender_clip(project_id, clip_id, settings, reframe=reframe)
+        sync_project_outputs(project_id, settings, store, clip_ids={clip_id})
+        _update_job(job_id, status="succeeded", message=f"{clip_id} re-rendered.")
+        return True
+    except Exception as exc:
+        log.exception("re-render failed for job %s", job_id)
+        _update_job(job_id, status="failed", error=str(exc) or type(exc).__name__)
+        return False
+
+
 def sync_project_outputs(
     project_id: str,
     settings: Settings,

@@ -15,6 +15,7 @@ from snipzo.models import (
     ProjectStatus,
     Render,
     Transcript,
+    Word,
 )
 from snipzo.pick.service import load_clips
 from snipzo.projects import get_storage, resolve_project
@@ -88,10 +89,16 @@ def render_clip(
     *,
     style: CaptionStyle,
     dest: Path,
+    words: list[Word] | None = None,
 ) -> Render:
-    """Render a single clip to `dest` with burned-in captions and audio polish."""
+    """Render a single clip to `dest` with burned-in captions and audio polish.
+
+    `words` overrides the transcript words (clip-relative times), e.g. after
+    caption edits in the clip editor.
+    """
     dest.parent.mkdir(parents=True, exist_ok=True)
-    words = words_for_clip(transcript, clip)
+    if words is None:
+        words = words_for_clip(transcript, clip)
     hook = hook_title_from_words(clip, words)
     ass_path = dest.with_suffix(".ass")
     ass_path.write_text(

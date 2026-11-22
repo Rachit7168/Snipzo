@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import mimetypes
 import shutil
 import tempfile
 from pathlib import Path
@@ -17,6 +18,10 @@ from snipzo.api import jobs
 from snipzo.api.blobstore import get_blob_store, source_key
 from snipzo.api.deps import Config, CurrentUser, DbSession
 from snipzo.api.schemas import (
+    CaptionLineIO,
+    ClipEditIn,
+    ClipEditorOut,
+    ClipEditResult,
     ClipOut,
     Credentials,
     JobOut,
@@ -282,6 +287,135 @@ def delete_project(
     return Response(status_code=204)
 
 
+def enqueue_rerender(job_id: str) -> None:
+    from snipzo.api.worker import enqueue_rerender as _enqueue
+
+    _enqueue(job_id)
+
+
+def _clip_row(db: DbSession, project_id: str, clip_id: str) -> ClipRow:
+    row = db.scalar(
+        select(ClipRow).where(
+            ClipRow.project_id == project_id, ClipRow.clip_id == clip_id
+        )
+    )
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Clip not found.")
+    return row
+
+
+def _latest_clip_job(project: ProjectRow, clip_id: str) -> Job | None:
+    matches = [
+        job
+        for job in project.jobs
+        if job.kind == "rerender" and job.payload.get("clip_id") == clip_id
+    ]
+    return matches[-1] if matches else None
+
+
+@projects.get("/{project_id}/clips/{clip_id}/editor", response_model=ClipEditorOut)
+def clip_editor(
+    project_id: str, clip_id: str, db: DbSession, user: CurrentUser, settings: Config
+) -> ClipEditorOut:
+    """Everything the editor needs: trim, captions, styles, and a source preview."""
+    from snipzo.edit import editor_state
+
+    project = owned_project(db, user, project_id)
+    row = _clip_row(db, project_id, clip_id)
+    try:
+        state = editor_state(project_id, clip_id, jobs.pipeline_settings())
+    except SnipzoError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    source_url = None
+    if project.source_key and project.source_deleted_at is None:
+        source_url = download_link(project.source_key, settings)
+    return ClipEditorOut(
+        project_id=project_id,
+        clip=clip_out(row, settings),
+        captions=[CaptionLineIO(**line.model_dump()) for line in state.captions],
+        captions_edited=state.captions_edited,
+        styles=state.styles,
+        source_duration=state.source_duration,
+        source_url=source_url,
+        job=job_out(_latest_clip_job(project, clip_id)),
+    )
+
+
+@projects.patch("/{project_id}/clips/{clip_id}", response_model=ClipEditResult)
+def edit_clip(
+    project_id: str,
+    clip_id: str,
+    body: ClipEditIn,
+    db: DbSession,
+    user: CurrentUser,
+    settings: Config,
+) -> ClipEditResult:
+    """Save trim/caption/title/style edits and (by default) queue a re-render."""
+    from snipzo.edit import CaptionLine, ClipEdit, apply_clip_edit, load_metadata
+    from snipzo.projects import get_storage, resolve_project
+
+    project = owned_project(db, user, project_id)
+    row = _clip_row(db, project_id, clip_id)
+    if body.rerender and project.source_deleted_at is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "The source video was deleted after the retention window.",
+        )
+    edit = ClipEdit(
+        start=body.start,
+        end=body.end,
+        hook_title=body.hook_title,
+        title=body.title,
+        description=body.description,
+        hashtags=body.hashtags,
+        style_id=body.style_id,
+        captions=(
+            [CaptionLine(**line.model_dump()) for line in body.captions]
+            if body.captions is not None
+            else None
+        ),
+    )
+    pipeline = jobs.pipeline_settings()
+    try:
+        clip, trimmed = apply_clip_edit(project_id, clip_id, edit, pipeline)
+    except SnipzoError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+
+    row.start = clip.start
+    row.end = clip.end
+    row.hook_title = clip.hook_title
+    if body.style_id is not None:
+        row.style_id = body.style_id
+    meta = load_metadata(
+        resolve_project(project_id, get_storage(pipeline.work_dir)), clip_id
+    )
+    if meta is not None:
+        row.title = meta.title
+        row.description = meta.description
+        row.hashtags = list(meta.hashtags)
+
+    job: Job | None = None
+    if body.rerender:
+        job = Job(
+            project_id=project_id,
+            kind="rerender",
+            status="queued",
+            stage="render",
+            payload={"clip_id": clip_id, "reframe": trimmed},
+            message=f"Queued re-render of {clip_id}.",
+        )
+        db.add(job)
+    db.commit()
+    if job is not None:
+        enqueue_rerender(job.id)
+    db.expire_all()
+    fresh_row = _clip_row(db, project_id, clip_id)
+    fresh_job = db.get(Job, job.id) if job is not None else None
+    return ClipEditResult(
+        clip=clip_out(fresh_row, settings), trimmed=trimmed, job=job_out(fresh_job)
+    )
+
+
 files = APIRouter(tags=["files"])
 
 
@@ -299,7 +433,8 @@ def download_file(token: str, settings: Config) -> Response:
     path = store.local_path(key)
     if path is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "File not found.")
-    return FileResponse(path, media_type="video/mp4", filename=Path(key).name)
+    media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    return FileResponse(path, media_type=media_type, filename=Path(key).name)
 
 
 def create_app(settings: ApiSettings | None = None) -> FastAPI:
