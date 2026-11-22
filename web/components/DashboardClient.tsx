@@ -2,25 +2,48 @@
 
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import StatusBadge from "@/components/StatusBadge";
 import UploadForm from "@/components/UploadForm";
+import WelcomeOnboardingModal from "@/components/WelcomeOnboardingModal";
 import {
   Alert,
   Badge,
+  Button,
+  buttonClasses,
   Card,
-  EmptyState,
   ProjectListSkeleton,
 } from "@/components/ui";
-import { apiFetch, formatSeconds, type Project } from "@/lib/api";
+import { apiFetch, formatSeconds, type BillingUsage, type Project } from "@/lib/api";
 import { mapApiError } from "@/lib/errors";
+
+const WELCOME_DISMISSED_KEY = "snipzo_welcome_dismissed";
+const CHECKLIST_DISMISSED_KEY = "snipzo_checklist_dismissed";
 
 export default function DashboardClient() {
   const { data: session } = useSession();
   const token = session?.accessToken;
+  const uploadSectionRef = useRef<HTMLDivElement | null>(null);
   const [projects, setProjects] = useState<Project[] | null>(null);
+  const [usage, setUsage] = useState<BillingUsage | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [welcomeOpen, setWelcomeOpen] = useState(false);
+  const [checklistDismissed, setChecklistDismissed] = useState(true);
+
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const isWelcome = params.get("welcome") === "1";
+      const alreadySeen = window.localStorage.getItem(WELCOME_DISMISSED_KEY) === "1";
+      if (isWelcome && !alreadySeen) {
+        setWelcomeOpen(true);
+      }
+      setChecklistDismissed(window.localStorage.getItem(CHECKLIST_DISMISSED_KEY) === "1");
+    } catch {
+      setChecklistDismissed(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (!token) return;
@@ -37,12 +60,50 @@ export default function DashboardClient() {
           if (active) setError(mapApiError(err, "Could not load projects.").message);
         });
     load();
+    apiFetch<BillingUsage>("/billing/me", token)
+      .then((info) => {
+        if (active) setUsage(info);
+      })
+      .catch(() => {
+        // optional usage summary
+      });
     const timer = setInterval(load, 5000);
     return () => {
       active = false;
       clearInterval(timer);
     };
   }, [token]);
+
+  function closeWelcome() {
+    setWelcomeOpen(false);
+    try {
+      window.localStorage.setItem(WELCOME_DISMISSED_KEY, "1");
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("welcome")) {
+        url.searchParams.delete("welcome");
+        window.history.replaceState({}, "", url.pathname + url.search);
+      }
+    } catch {
+      // ignore storage errors
+    }
+  }
+
+  function dismissChecklist() {
+    setChecklistDismissed(true);
+    try {
+      window.localStorage.setItem(CHECKLIST_DISMISSED_KEY, "1");
+    } catch {
+      // ignore
+    }
+  }
+
+  function focusUpload() {
+    uploadSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const titleInput = document.getElementById("upload-title");
+    if (titleInput instanceof HTMLElement) {
+      titleInput.focus({ preventScroll: true });
+    }
+  }
 
   if (!token) {
     return (
@@ -56,97 +117,210 @@ export default function DashboardClient() {
     );
   }
 
+  const hasProjects = projects !== null && projects.length > 0;
+  const hasCompleteProject = projects !== null && projects.some((p) => p.status === "complete");
+  const showChecklist = !checklistDismissed && (!hasCompleteProject || (projects?.length ?? 0) <= 1);
+  const planName = usage?.plan.name || (session?.plan ? session.plan.toUpperCase() : "Free");
+
   return (
-    <div className="grid gap-8 lg:grid-cols-[390px_1fr]">
-      <div className="space-y-4">
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge tone="brand">
-              {session?.plan ? `${session.plan.toUpperCase()} plan` : "Workspace"}
-            </Badge>
-            <Link href="/billing" className="text-xs font-medium text-ink-muted hover:text-ink">
-              View limits →
-            </Link>
+    <>
+      <WelcomeOnboardingModal
+        open={welcomeOpen}
+        onClose={closeWelcome}
+        onStartUpload={focusUpload}
+        videosPerMonth={usage?.plan.videos_per_month}
+        minutesPerMonth={usage?.plan.minutes_per_month}
+      />
+
+      <div className="grid gap-8 lg:grid-cols-[390px_1fr]">
+        <div ref={uploadSectionRef} className="space-y-4">
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone="brand">{planName} plan</Badge>
+              <Link href="/billing" className="text-xs font-medium text-ink-muted hover:text-ink">
+                View limits →
+              </Link>
+              <Link href="/pricing" className="text-xs font-medium text-ink-subtle hover:text-ink">
+                Pricing
+              </Link>
+            </div>
+            <h1 className="text-3xl font-black tracking-tight text-ink">
+              Long video in, Shorts out.
+            </h1>
+            <p className="text-sm leading-relaxed text-ink-muted">
+              Upload a talk, podcast, or interview — or paste a YouTube video link. Snipzo picks
+              the best moments and renders vertical Shorts with captions, a hook title, and metadata.
+            </p>
           </div>
-          <h1 className="text-3xl font-black tracking-tight text-ink">
-            Long video in, Shorts out.
-          </h1>
-          <p className="text-sm leading-relaxed text-ink-muted">
-            Upload a talk, podcast, or interview — or paste a YouTube video link. Snipzo picks the
-            best moments and renders vertical Shorts with captions, a hook title, and metadata
-            (720p with watermark on Free; 1080p watermark-free on Creator &amp; Pro).
-          </p>
-        </div>
-        <UploadForm token={token} />
-      </div>
 
-      <section className="min-w-0 space-y-3" aria-labelledby="projects-heading">
-        <div className="flex items-center justify-between">
-          <h2 id="projects-heading" className="text-lg font-bold tracking-tight text-ink">
-            Your projects
-          </h2>
-          {projects && projects.length > 0 && (
-            <span className="text-xs text-ink-subtle">
-              {projects.length} {projects.length === 1 ? "project" : "projects"}
-            </span>
+          {usage ? (
+            <div className="rounded-control border border-line bg-surface px-3.5 py-2.5 text-xs text-ink-muted">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span>
+                  <strong className="text-ink">
+                    {usage.videos_used}/{usage.plan.videos_per_month}
+                  </strong>{" "}
+                  {usage.plan.videos_per_month === 1 ? "video" : "videos"} ·{" "}
+                  <strong className="text-ink">
+                    {usage.minutes_used.toFixed(0)}/{usage.plan.minutes_per_month}
+                  </strong>{" "}
+                  min used this month
+                </span>
+                <span className="text-ink-subtle">
+                  {usage.plan.max_resolution}
+                  {usage.plan.watermark ? " · watermarked" : " · clean"}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-control border border-line bg-surface px-3.5 py-2.5 text-xs text-ink-muted">
+              720p with Snipzo watermark on Free (3 videos / 30 min per month); 1080p watermark-free
+              on Creator &amp; Pro.
+            </div>
           )}
+
+          <UploadForm token={token} />
         </div>
 
-        {error && <Alert tone="error">{error}</Alert>}
-
-        {projects === null ? (
-          <ProjectListSkeleton />
-        ) : projects.length === 0 ? (
-          <EmptyState
-            title="No projects yet"
-            description="Upload a long-form video or paste a YouTube link on the left to generate your first Shorts."
-            icon={
-              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-            }
-          />
-        ) : (
-          <ul className="space-y-3">
-            {projects.map((project) => (
-              <li key={project.id}>
-                <Link
-                  href={`/projects/${project.id}`}
-                  className="card flex flex-col gap-3 transition hover:border-line-strong sm:flex-row sm:items-center sm:justify-between"
+        <section className="min-w-0 space-y-4" aria-labelledby="projects-heading">
+          {showChecklist && (
+            <Card className="space-y-3 border-brand/30 bg-surface/90">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-sm font-bold text-ink">Getting started</h2>
+                  <p className="text-xs text-ink-muted">
+                    Go from raw video to ready-to-post Shorts without a card or YouTube login.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={dismissChecklist}
+                  className="text-xs font-medium text-ink-subtle hover:text-ink"
                 >
-                  <div className="flex min-w-0 items-center gap-3">
-                    {project.source_thumbnail_url && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={project.source_thumbnail_url}
-                        alt=""
-                        className="h-12 w-20 shrink-0 rounded-md bg-surface-muted object-cover"
-                      />
-                    )}
-                    <div className="min-w-0">
-                      <p className="truncate font-semibold text-ink">
-                        {project.title || project.source_filename}
-                      </p>
-                      <p className="text-xs text-ink-subtle">
-                        {new Date(project.created_at).toLocaleString()} ·{" "}
-                        {formatSeconds(project.duration_seconds)}
-                      </p>
+                  Dismiss
+                </button>
+              </div>
+              <ol className="grid gap-2 text-xs sm:grid-cols-3">
+                {[
+                  { label: "Create account", done: true },
+                  { label: "Upload or paste a link", done: hasProjects },
+                  { label: "Edit or download Short", done: hasCompleteProject },
+                ].map((step, idx) => (
+                  <li
+                    key={step.label}
+                    className={`flex items-center gap-2 rounded-control border px-3 py-2 font-medium ${
+                      step.done
+                        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                        : "border-line bg-surface-muted/60 text-ink-muted"
+                    }`}
+                  >
+                    <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-current text-[10px] font-bold">
+                      {step.done ? "✓" : idx + 1}
+                    </span>
+                    <span className="truncate">{step.label}</span>
+                  </li>
+                ))}
+              </ol>
+            </Card>
+          )}
+
+          <div className="flex items-center justify-between">
+            <h2 id="projects-heading" className="text-lg font-bold tracking-tight text-ink">
+              Your projects
+            </h2>
+            {projects && projects.length > 0 && (
+              <span className="text-xs text-ink-subtle">
+                {projects.length} {projects.length === 1 ? "project" : "projects"}
+              </span>
+            )}
+          </div>
+
+          {error && <Alert tone="error">{error}</Alert>}
+
+          {projects === null ? (
+            <ProjectListSkeleton />
+          ) : projects.length === 0 ? (
+            <Card className="grid items-center gap-6 p-6 sm:grid-cols-[1fr_180px]">
+              <div className="space-y-3">
+                <Badge tone="neutral">First run</Badge>
+                <h3 className="text-xl font-bold tracking-tight text-ink">
+                  Upload your first video
+                </h3>
+                <p className="text-sm leading-relaxed text-ink-muted">
+                  Drop a video you own on the left or paste a public YouTube link. In a few
+                  minutes you&apos;ll have vertical Shorts with speaker-centered framing and burned-in
+                  captions ready to edit or download.
+                </p>
+                <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                  <Button type="button" onClick={focusUpload}>
+                    Upload your first video
+                  </Button>
+                  <Link href="/pricing" className={buttonClasses({ variant: "ghost", size: "md" })}>
+                    See plan limits
+                  </Link>
+                </div>
+              </div>
+              <div className="mx-auto w-full max-w-[180px] space-y-1.5">
+                <div className="aspect-[9/16] overflow-hidden rounded-xl border border-line bg-black">
+                  <video
+                    src="/demo-short.mp4"
+                    poster="/demo-poster.jpg"
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    preload="metadata"
+                    aria-label="Sample vertical Short preview"
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+                <p className="text-center text-[11px] text-ink-subtle">
+                  Sample output · 9:16 + captions
+                </p>
+              </div>
+            </Card>
+          ) : (
+            <ul className="space-y-3">
+              {projects.map((project) => (
+                <li key={project.id}>
+                  <Link
+                    href={`/projects/${project.id}`}
+                    className="card flex flex-col gap-3 transition hover:border-line-strong sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      {project.source_thumbnail_url && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={project.source_thumbnail_url}
+                          alt=""
+                          className="h-12 w-20 shrink-0 rounded-md bg-surface-muted object-cover"
+                        />
+                      )}
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-ink">
+                          {project.title || project.source_filename}
+                        </p>
+                        <p className="text-xs text-ink-subtle">
+                          {new Date(project.created_at).toLocaleString()} ·{" "}
+                          {formatSeconds(project.duration_seconds)}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex items-center justify-between gap-3 sm:justify-end">
-                    {project.job && project.job.status === "running" && (
-                      <span className="text-xs font-medium text-ink-muted">
-                        {Math.round(project.job.progress * 100)}%
-                      </span>
-                    )}
-                    <StatusBadge status={project.status} />
-                  </div>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-    </div>
+                    <div className="flex items-center justify-between gap-3 sm:justify-end">
+                      {project.job && project.job.status === "running" && (
+                        <span className="text-xs font-medium text-ink-muted">
+                          {Math.round(project.job.progress * 100)}%
+                        </span>
+                      )}
+                      <StatusBadge status={project.status} />
+                    </div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
+    </>
   );
 }
