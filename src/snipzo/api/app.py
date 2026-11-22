@@ -11,6 +11,7 @@ from typing import Annotated
 from fastapi import APIRouter, FastAPI, File, Form, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse, Response
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
 from snipzo import __version__
@@ -31,7 +32,8 @@ from snipzo.api.schemas import (
 )
 from snipzo.api.security import hash_password, sign, unsign, verify_password
 from snipzo.api.settings import ApiSettings, get_api_settings
-from snipzo.api.tables import ClipRow, Job, ProjectRow, User
+from snipzo.api.tables import ClipRow, Job, ProjectRow, TakedownRequest, User
+from snipzo.api.youtube_routes import router as youtube_router
 from snipzo.errors import SnipzoError
 from snipzo.ingest.service import new_project_id
 
@@ -437,6 +439,38 @@ def download_file(token: str, settings: Config) -> Response:
     return FileResponse(path, media_type=media_type, filename=Path(key).name)
 
 
+legal = APIRouter(tags=["legal"])
+
+
+class TakedownIn(BaseModel):
+    reporter_name: str = Field(min_length=2, max_length=200)
+    reporter_email: str = Field(min_length=3, max_length=320)
+    content_url: str = Field(min_length=5, max_length=2000)
+    original_url: str | None = Field(default=None, max_length=2000)
+    details: str = Field(min_length=10, max_length=5000)
+    good_faith: bool = False
+
+
+@legal.post("/takedown", status_code=201)
+def submit_takedown(body: TakedownIn, db: DbSession) -> dict[str, str]:
+    """Record a takedown request (reviewed by the operator; see docs/TAKEDOWN.md)."""
+    if not body.good_faith or "@" not in body.reporter_email:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "A valid email and the good-faith statement are required.",
+        )
+    item = TakedownRequest(
+        reporter_name=body.reporter_name,
+        reporter_email=body.reporter_email.strip(),
+        content_url=body.content_url,
+        original_url=body.original_url,
+        details=body.details,
+    )
+    db.add(item)
+    db.flush()
+    return {"id": item.id, "status": item.status}
+
+
 def create_app(settings: ApiSettings | None = None) -> FastAPI:
     cfg = settings or get_api_settings()
     application = FastAPI(title="Snipzo API", version=__version__)
@@ -456,6 +490,8 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
     application.include_router(auth)
     application.include_router(projects)
     application.include_router(files)
+    application.include_router(youtube_router)
+    application.include_router(legal)
     return application
 
 

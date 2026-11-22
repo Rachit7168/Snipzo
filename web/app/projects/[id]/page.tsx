@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 
 import ClipCard from "@/components/ClipCard";
+import PublishPanel from "@/components/PublishPanel";
 import StatusBadge from "@/components/StatusBadge";
 import { apiFetch, formatSeconds, STAGES, type Project } from "@/lib/api";
 
@@ -89,6 +90,10 @@ export default function ProjectPage() {
           </ol>
           {job.error && <p className="text-sm text-red-400">{job.error}</p>}
         </section>
+      )}
+
+      {project.clips.length > 0 && token && project.status === "complete" && (
+        <PublishPanel projectId={project.id} clips={project.clips} token={token} />
       )}
 
       {project.clips.length > 0 && (

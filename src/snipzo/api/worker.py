@@ -33,6 +33,7 @@ def configure_celery(settings: ApiSettings | None = None) -> Celery:
             "snipzo.highlights_render": {"queue": "cpu"},
             "snipzo.cleanup_sources": {"queue": "cpu"},
             "snipzo.rerender_clip": {"queue": "cpu"},
+            "snipzo.publish_clip": {"queue": "cpu"},
         },
         beat_schedule={
             "cleanup-sources-daily": {
@@ -62,6 +63,13 @@ def rerender_clip_task(job_id: str) -> bool:
     return jobs.run_rerender(job_id)
 
 
+@celery_app.task(name="snipzo.publish_clip")
+def publish_clip_task(job_id: str) -> bool:
+    from snipzo.api.publishing import run_publish
+
+    return run_publish(job_id)
+
+
 @celery_app.task(name="snipzo.cleanup_sources")
 def cleanup_sources_task() -> list[str]:
     return jobs.cleanup_sources()
@@ -80,3 +88,9 @@ def enqueue_rerender(job_id: str) -> None:
     """Queue a single-clip re-render on the CPU queue."""
     configure_celery()
     rerender_clip_task.delay(job_id)
+
+
+def enqueue_publish(job_id: str) -> None:
+    """Queue a YouTube upload."""
+    configure_celery()
+    publish_clip_task.delay(job_id)

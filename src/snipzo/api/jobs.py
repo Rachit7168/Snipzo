@@ -150,7 +150,20 @@ def run_ingest_and_transcribe(job_id: str) -> bool:
         scratch = Path(tempfile.mkdtemp(prefix="snipzo-src-"))
         try:
             local = scratch / Path(filename).name
-            if kind == "url":
+            if kind == "youtube":
+                from snipzo.api.publishing import download_owned_video
+
+                if not url:
+                    raise SnipzoError("Project has no YouTube video.")
+                local = local.with_suffix(".mp4")
+                download_owned_video(url, local)
+                key = source_key(project_id, local.name)
+                store.put_file(key, local)
+                with session_scope() as session:
+                    row = session.get(ProjectRow, project_id)
+                    if row is not None:
+                        row.source_key = key
+            elif kind == "url":
                 if not url:
                     raise SnipzoError("Project has no source URL.")
                 download_url(url, local, max_bytes=api_settings.max_upload_mb * 2**20)

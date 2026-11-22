@@ -71,6 +71,28 @@ class ApiSettings(BaseSettings):
         description="Allow importing direct video file URLs (not YouTube pages).",
     )
 
+    web_app_url: str = Field(
+        default="http://localhost:3000",
+        description="Where OAuth callbacks send the browser afterwards.",
+    )
+    google_client_id: str | None = Field(
+        default=None, description="Google OAuth client ID (YouTube Data API)."
+    )
+    google_client_secret: str | None = None
+    google_redirect_uri: str = Field(
+        default="http://localhost:8000/youtube/callback",
+        description="Authorized redirect URI registered in Google Cloud.",
+    )
+    token_encryption_key: str | None = Field(
+        default=None,
+        description="Fernet key for OAuth tokens at rest (derived from "
+        "SNIPZO_SECRET_KEY when unset).",
+    )
+    youtube_import_downloader: Literal["disabled", "yt-dlp"] = Field(
+        default="disabled",
+        description="How to fetch media for owned YouTube imports.",
+    )
+
     def cors_origin_list(self) -> list[str]:
         return [item.strip() for item in self.cors_origins.split(",") if item.strip()]
 

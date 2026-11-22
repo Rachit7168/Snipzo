@@ -201,3 +201,18 @@ class Job(Base):
     )
 
     project: Mapped[ProjectRow] = relationship(back_populates="jobs")
+
+
+class TakedownRequest(Base):
+    """A copyright/takedown report about content processed or published by Snipzo."""
+
+    __tablename__ = "takedown_requests"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    reporter_name: Mapped[str] = mapped_column(String(200))
+    reporter_email: Mapped[str] = mapped_column(String(320))
+    content_url: Mapped[str] = mapped_column(Text)
+    original_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    details: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(32), default="received")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

@@ -132,3 +132,34 @@ export type ClipEditor = {
 };
 
 export type ClipEditResult = { clip: Clip; trimmed: boolean; job: Job | null };
+
+export type Channel = {
+  id: string;
+  provider: string;
+  external_id: string;
+  title: string | null;
+  connected_at: string;
+};
+
+export type YouTubeStatus = { configured: boolean; import_enabled: boolean; channels: Channel[] };
+
+export type OwnedVideo = {
+  id: string;
+  title: string;
+  published_at: string | null;
+  thumbnail: string | null;
+};
+
+export type Publication = {
+  id: string;
+  clip_id: string;
+  channel_id: string;
+  status: string;
+  external_id: string | null;
+  url: string | null;
+  privacy_status: string;
+  publish_at: string | null;
+  contains_synthetic_media: boolean;
+  error: string | null;
+  created_at: string;
+};

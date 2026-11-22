@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
+import Footer from "@/components/Footer";
 import Nav from "@/components/Nav";
 import Providers from "@/components/Providers";
 
@@ -17,7 +18,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body>
         <Providers>
           <Nav />
-          <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>
+          <main className="mx-auto min-h-[70vh] max-w-6xl px-6 py-8">{children}</main>
+          <Footer />
         </Providers>
       </body>
     </html>
