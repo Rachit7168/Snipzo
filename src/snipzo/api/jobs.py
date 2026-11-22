@@ -267,8 +267,20 @@ def run_highlights_and_render(job_id: str) -> bool:
         if job.status == "failed":
             return False
 
+    stage_messages = {
+        "ingest": "Preparing source video...",
+        "transcribe": "Transcribing audio...",
+        "pick": "Finding highlight moments...",
+        "metadata": "Writing clip titles and hashtags...",
+        "reframe": "Framing speaker for 9:16 video...",
+        "render": "Rendering Shorts with captions...",
+    }
+
     def on_progress(stage: str, message: str) -> None:
-        _update_job(job_id, stage=stage, message=message, project_status=stage)
+        if stage in ("ingest", "transcribe"):
+            return
+        friendly = stage_messages.get(stage, "Processing video...")
+        _update_job(job_id, stage=stage, message=friendly, project_status=stage)
 
     try:
         run_pipeline(None, settings, project_ref=project_id, on_progress=on_progress)

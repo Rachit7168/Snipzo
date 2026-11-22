@@ -94,20 +94,66 @@ export async function apiFetch<T>(
   return (await response.json()) as T;
 }
 
-/** Upload with progress reporting (fetch has no upload progress events). */
+export type UploadProgress = {
+  loaded: number;
+  total: number;
+  fraction: number;
+};
+
+export function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  let value = bytes;
+  let idx = 0;
+  while (value >= 1024 && idx < units.length - 1) {
+    value /= 1024;
+    idx += 1;
+  }
+  return `${value >= 10 || idx === 0 ? Math.round(value) : value.toFixed(1)} ${units[idx]}`;
+}
+
+export class UploadCancelledError extends Error {
+  constructor() {
+    super("Upload cancelled.");
+    this.name = "UploadCancelledError";
+  }
+}
+
+/** Upload with byte-level progress reporting and cancellation support. */
 export function uploadProject(
   token: string,
   form: FormData,
-  onProgress: (fraction: number) => void,
+  onProgress: (progress: UploadProgress) => void,
+  options?: { signal?: AbortSignal },
 ): Promise<Project> {
   return new Promise((resolve, reject) => {
+    if (options?.signal?.aborted) {
+      reject(new UploadCancelledError());
+      return;
+    }
     const xhr = new XMLHttpRequest();
+    const cleanupAbort = () => {
+      if (options?.signal) options.signal.removeEventListener("abort", onAbort);
+    };
+    const onAbort = () => {
+      xhr.abort();
+    };
+    if (options?.signal) {
+      options.signal.addEventListener("abort", onAbort, { once: true });
+    }
     xhr.open("POST", `${API_URL}/projects`);
     xhr.setRequestHeader("Authorization", `Bearer ${token}`);
     xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable) onProgress(event.loaded / event.total);
+      if (event.lengthComputable && event.total > 0) {
+        onProgress({
+          loaded: event.loaded,
+          total: event.total,
+          fraction: Math.min(1, event.loaded / event.total),
+        });
+      }
     };
     xhr.onload = () => {
+      cleanupAbort();
       let body: { detail?: unknown; request_id?: string } | null = null;
       try {
         body = JSON.parse(xhr.responseText);
@@ -123,7 +169,14 @@ export function uploadProject(
         reject(new ApiError(xhr.status, message, detail, body?.request_id));
       }
     };
-    xhr.onerror = () => reject(new ApiError(0, "Service unavailable"));
+    xhr.onerror = () => {
+      cleanupAbort();
+      reject(new ApiError(0, "Service unavailable"));
+    };
+    xhr.onabort = () => {
+      cleanupAbort();
+      reject(new UploadCancelledError());
+    };
     xhr.send(form);
   });
 }
