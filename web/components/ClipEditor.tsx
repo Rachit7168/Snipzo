@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { useToast } from "@/components/Toast";
+import { mapApiError, sanitizeJobErrorText } from "@/lib/errors";
 import {
   apiFetch,
   formatSeconds,
@@ -35,6 +37,7 @@ export default function ClipEditor({
   clipId: string;
   token: string;
 }) {
+  const { showToast } = useToast();
   const [data, setData] = useState<EditorData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -70,7 +73,7 @@ export default function ClipEditor({
   }, [projectId, clipId, token]);
 
   useEffect(() => {
-    load().catch((err: Error) => setError(err.message));
+    load().catch((err: unknown) => setError(mapApiError(err, "Could not load clip editor.").message));
   }, [load]);
 
   const trimmed = data ? Math.abs(start - data.clip.start) > 0.01 || Math.abs(end - data.clip.end) > 0.01 : false;
@@ -134,11 +137,13 @@ export default function ClipEditor({
         setNotice("Re-rendering...");
         job = await pollJob(job.id);
       }
-      if (job?.status === "failed") throw new Error(job.error || "Re-render failed.");
+      if (job?.status === "failed") throw new Error(sanitizeJobErrorText(job.error));
       await load();
       setNotice(result.trimmed ? "Saved. Trim changed, so captions were regenerated." : "Saved and re-rendered.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Save failed.");
+      const mapped = mapApiError(err, "Save failed.");
+      setError(mapped.message);
+      showToast({ title: mapped.title, message: mapped.message, tone: "error" });
     } finally {
       setSaving(false);
     }

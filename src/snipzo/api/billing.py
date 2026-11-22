@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import logging
 import shutil
 import time
 from collections.abc import Callable
@@ -22,6 +23,7 @@ from snipzo.api.tables import ProjectRow, UsageEvent, User
 from snipzo.errors import SnipzoError
 from snipzo.media import run_ffmpeg
 
+log = logging.getLogger(__name__)
 STRIPE_API = "https://api.stripe.com/v1"
 
 # Tests swap this for an httpx.Client backed by httpx.MockTransport.
@@ -241,7 +243,10 @@ def _stripe_post(
     settings: ApiSettings, path: str, data: dict[str, str]
 ) -> dict[str, Any]:
     if not settings.stripe_secret_key:
-        raise SnipzoError("Billing is not configured (set SNIPZO_STRIPE_SECRET_KEY).")
+        log.warning(
+            "Stripe checkout/portal requested while SNIPZO_STRIPE_SECRET_KEY is unset"
+        )
+        raise SnipzoError("Upgrades are temporarily unavailable.")
     with stripe_http_factory() as client:
         response = client.post(
             f"{STRIPE_API}/{path}",
@@ -264,7 +269,8 @@ def _stripe_post(
 def create_checkout_session(settings: ApiSettings, user: User, plan_id: str) -> str:
     price = price_for_plan(settings, plan_id)
     if not price:
-        raise SnipzoError(f"No Stripe price configured for the {plan_id} plan.")
+        log.warning("No Stripe price configured for plan %s", plan_id)
+        raise SnipzoError("This plan is temporarily unavailable.")
     base = settings.web_app_url.rstrip("/")
     data = {
         "mode": "subscription",

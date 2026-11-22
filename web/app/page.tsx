@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import StatusBadge from "@/components/StatusBadge";
 import UploadForm from "@/components/UploadForm";
 import { apiFetch, formatSeconds, type Project } from "@/lib/api";
+import { mapApiError } from "@/lib/errors";
 
 export default function Dashboard() {
   const { data: session } = useSession();
@@ -20,7 +21,7 @@ export default function Dashboard() {
     const load = () =>
       apiFetch<Project[]>("/projects", token)
         .then((items) => active && setProjects(items))
-        .catch((err: Error) => active && setError(err.message));
+        .catch((err: unknown) => active && setError(mapApiError(err, "Could not load projects.").message));
     load();
     const timer = setInterval(load, 5000);
     return () => {

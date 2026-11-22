@@ -9,6 +9,7 @@ import ClipCard from "@/components/ClipCard";
 import PublishPanel from "@/components/PublishPanel";
 import StatusBadge from "@/components/StatusBadge";
 import { apiFetch, formatSeconds, STAGES, type Project } from "@/lib/api";
+import { mapApiError, sanitizeJobErrorText } from "@/lib/errors";
 
 const DONE = new Set(["complete", "failed"]);
 
@@ -31,7 +32,7 @@ export default function ProjectPage() {
         const jobRunning = data.job && !["succeeded", "failed"].includes(data.job.status);
         if (!DONE.has(data.status) || jobRunning) timer = setTimeout(load, 2500);
       } catch (err) {
-        if (active) setError(err instanceof Error ? err.message : "Could not load project.");
+        if (active) setError(mapApiError(err, "Could not load project.").message);
       }
     };
     load();
@@ -41,12 +42,26 @@ export default function ProjectPage() {
     };
   }, [token, id]);
 
-  if (error) return <p className="text-red-400">{error}</p>;
+  if (error) {
+    return (
+      <div role="alert" className="card mx-auto max-w-lg space-y-3 border-red-500/30 text-center">
+        <p className="font-semibold text-red-300">Couldn&apos;t open this project</p>
+        <p className="text-sm text-neutral-400">{error}</p>
+        <div className="flex justify-center gap-3 pt-1">
+          <Link href="/" className="btn">
+            Back to projects
+          </Link>
+        </div>
+      </div>
+    );
+  }
   if (!project) return <p className="text-neutral-400">Loading project...</p>;
 
   const job = project.job;
   const stageIndex = job?.stage ? STAGES.indexOf(job.stage) : -1;
   const running = job && !["succeeded", "failed"].includes(job.status);
+  const failed = project.status === "failed" || job?.status === "failed";
+  const friendlyFailure = failed ? sanitizeJobErrorText(job?.error || project.error) : null;
 
   return (
     <div className="space-y-6">
@@ -61,7 +76,7 @@ export default function ProjectPage() {
               <img
                 src={project.source_thumbnail_url}
                 alt={project.source_title || project.title || "Source video"}
-                className="h-16 w-28 shrink-0 rounded-md object-cover bg-neutral-800"
+                className="h-16 w-28 shrink-0 rounded-md bg-neutral-800 object-cover"
               />
             )}
             <div>
@@ -85,7 +100,7 @@ export default function ProjectPage() {
         <StatusBadge status={project.status} />
       </div>
 
-      {job && (running || job.status === "failed") && (
+      {job && running && (
         <section className="card space-y-3">
           <div className="flex justify-between text-sm">
             <span>{job.message || "Queued..."}</span>
@@ -110,7 +125,23 @@ export default function ProjectPage() {
               </li>
             ))}
           </ol>
-          {job.error && <p className="text-sm text-red-400">{job.error}</p>}
+        </section>
+      )}
+
+      {failed && friendlyFailure && (
+        <section role="alert" className="card space-y-3 border-red-500/30 bg-red-950/20">
+          <div className="space-y-1">
+            <h2 className="text-base font-semibold text-red-200">We couldn&apos;t finish processing this video</h2>
+            <p className="text-sm text-neutral-300">{friendlyFailure}</p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Link href="/" className="btn">
+              Try another file
+            </Link>
+            <Link href="/takedown" className="btn-ghost text-sm">
+              Contact support
+            </Link>
+          </div>
         </section>
       )}
 
