@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { useRouter } from "next/navigation";
 import {
   useRef,
@@ -333,6 +335,18 @@ export default function UploadForm({ token }: { token: string }) {
           label="I own or have rights to this content."
           error={fieldErrors.rights_confirmed}
         />
+
+        <p className="text-xs leading-relaxed text-ink-subtle">
+          Upload recordings you filmed, podcasts or talks you host, or clips where you hold
+          distribution rights.{" "}
+          <Link href="/terms" className="font-medium text-ink-muted underline hover:text-ink">
+            Terms
+          </Link>{" "}
+          ·{" "}
+          <Link href="/takedown" className="font-medium text-ink-muted underline hover:text-ink">
+            Copyright policy
+          </Link>
+        </p>
 
         {formError && <Alert tone="error">{formError}</Alert>}
 

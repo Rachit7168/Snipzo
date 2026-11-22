@@ -174,6 +174,41 @@ export default function ProjectPage() {
         </Alert>
       )}
 
+      {project.clips.length > 0 && project.status === "complete" && (
+        <Alert
+          tone="success"
+          title="Your Shorts are ready — what would you like to do next?"
+          action={
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href={`/projects/${project.id}/clips/${project.clips[0].clip_id}`}
+                className={buttonClasses({ variant: "primary", size: "sm" })}
+              >
+                Open clip editor
+              </Link>
+              {project.clips[0].download_url && (
+                <a
+                  href={project.clips[0].download_url}
+                  download={`${project.clips[0].clip_id}.mp4`}
+                  className={buttonClasses({ variant: "secondary", size: "sm" })}
+                >
+                  Download top Short
+                </a>
+              )}
+              <Link
+                href="/channels"
+                className={buttonClasses({ variant: "ghost", size: "sm" })}
+              >
+                Connect YouTube
+              </Link>
+            </div>
+          }
+        >
+          Preview your vertical clips below, trim or edit captions in the editor, download MP4s,
+          or publish straight to YouTube Shorts.
+        </Alert>
+      )}
+
       {project.clips.length > 0 && token && project.status === "complete" && (
         <PublishPanel projectId={project.id} clips={project.clips} token={token} />
       )}
