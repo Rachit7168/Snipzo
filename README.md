@@ -174,7 +174,7 @@ curl -s localhost:8000/projects -H "Authorization: Bearer $TOKEN" \
 curl -s localhost:8000/projects/<id> -H "Authorization: Bearer $TOKEN"   # job progress + clips
 ```
 
-Each clip in the response has a signed, expiring `download_url` (usable directly in a `<video>` tag). You can also pass `-F source_url=https://.../video.mp4` instead of a file; YouTube/TikTok/Instagram page links are rejected.
+Each clip in the response has a signed, expiring `download_url` (usable directly in a `<video>` tag). You can also pass `-F source_url=` with a YouTube video link (watch, youtu.be, Shorts, live replay, embed, m.youtube, music.youtube) or a direct file URL. Playlist-only, private, age-restricted, members-only, and in-progress live videos are rejected with a friendly message. TikTok and Instagram links are not supported. The rights checkbox is required either way. Plan minute limits are checked from YouTube metadata before the download starts. `SNIPZO_YOUTUBE_IMPORT_DOWNLOADER` defaults to `yt-dlp` (set `disabled` to require file uploads).
 
 Jobs run in two Celery tasks: `snipzo.ingest_transcribe` on the `gpu` queue (Whisper), then `snipzo.highlights_render` on the `cpu` queue (pick, metadata, reframe, FFmpeg render). Run separate workers per queue in production (`-Q gpu` on GPU hosts, `-Q cpu` elsewhere). All workers must share `SNIPZO_WORK_DIR` (or a volume).
 
@@ -182,7 +182,7 @@ Storage: set `SNIPZO_STORAGE_BACKEND=s3`, `SNIPZO_S3_BUCKET`, `SNIPZO_S3_ENDPOIN
 
 ## Web app
 
-`web/` is a Next.js + Tailwind app with email/password sign-in (Auth.js / NextAuth credentials provider backed by the API's `/auth/login`). Signed-in users can upload a file or paste a direct video URL (with the "I own or have rights to this content" checkbox), watch job progress by stage, preview each Short with its score and reason, and download the MP4.
+`web/` is a Next.js + Tailwind app with email/password sign-in (Auth.js / NextAuth credentials provider backed by the API's `/auth/login`). Signed-in users can upload a file or paste any YouTube video link or a direct video URL (with the "I own or have rights to this content" checkbox), watch job progress by stage, preview each Short with its score and reason, and download the MP4.
 
 ```bash
 # Terminal 1: API (jobs inline, no Redis needed)
@@ -213,7 +213,8 @@ API: `GET /projects/{id}/clips/{clip_id}/editor` and `PATCH /projects/{id}/clips
 2. Set `SNIPZO_GOOGLE_CLIENT_ID`, `SNIPZO_GOOGLE_CLIENT_SECRET`, `SNIPZO_TOKEN_ENCRYPTION_KEY` (Fernet), and `SNIPZO_WEB_APP_URL` on the API and workers.
 3. In the web app, open **Channels → Connect YouTube**. Tokens are stored encrypted (Fernet) and refreshed automatically.
 
-- **Import**: lists videos from your channel's own uploads playlist; `POST /youtube/channels/{id}/import` checks the video's `channelId` matches your connected channel (403 otherwise) and requires the rights checkbox. The Data API does not provide media files, so by default import stops after verifying ownership (HTTP 501, with a message to upload the original). Set `SNIPZO_YOUTUBE_IMPORT_DOWNLOADER=yt-dlp` and install `yt-dlp` on workers to fetch owned videos.
+- **Paste a YouTube URL**: the dashboard (and `POST /projects` with `source_url`) accepts any public single-video YouTube link — `youtube.com/watch`, `youtu.be`, `/shorts/`, `/live/` (ended), `/embed/`, `m.youtube.com`, `music.youtube.com` — including timestamps and playlist query params (only that video is imported). Title and thumbnail are stored on the project. `yt-dlp` is the default downloader (`SNIPZO_YOUTUBE_IMPORT_DOWNLOADER=yt-dlp`, shipped in the `api` and `pipeline` extras). If YouTube bot-checks a datacenter IP, set `SNIPZO_YOUTUBE_COOKIES_FILE` and/or `SNIPZO_YOUTUBE_PROXY`.
+- **Import from a connected channel**: lists videos from your channel's own uploads playlist; `POST /youtube/channels/{id}/import` checks the video's `channelId` matches your connected channel (403 otherwise) and requires the rights checkbox. Media is fetched with the same yt-dlp downloader. Set `SNIPZO_YOUTUBE_IMPORT_DOWNLOADER=disabled` to verify ownership only (HTTP 501) and require a file upload.
 - **Publish**: `POST /projects/{id}/clips/{clip_id}/publish` (and the Publish panel on a project) runs a resumable `videos.insert` upload on the worker with title/description/tags, privacy, optional scheduling (`publishAt`, forced private as YouTube requires), `selfDeclaredMadeForKids`, and the altered/synthetic content disclosure (`containsSyntheticMedia`). Requires the rights confirmation.
 - **Legal**: the web app ships template `/privacy` (incl. Google API Services User Data Policy / Limited Use), `/terms`, and `/takedown` pages; notices are stored via `POST /takedown`. Operator process: [docs/TAKEDOWN.md](docs/TAKEDOWN.md).
 

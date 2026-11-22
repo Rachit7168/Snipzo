@@ -7,6 +7,7 @@ RUN apt-get update \
 WORKDIR /app
 
 # Extras to install: "" for the CLI only, "api,pipeline" for the API and workers.
+# The api and pipeline extras include yt-dlp for YouTube URL imports.
 ARG SNIPZO_EXTRAS=""
 
 COPY pyproject.toml README.md alembic.ini ./

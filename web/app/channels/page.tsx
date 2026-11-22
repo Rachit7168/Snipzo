@@ -105,8 +105,8 @@ export default function ChannelsPage() {
             </label>
             {!status.import_enabled && (
               <p className="text-xs text-neutral-500">
-                Import verifies ownership; downloading the file needs the worker&apos;s import downloader
-                enabled. Otherwise upload the original file.
+                Import can verify ownership, but downloading isn&apos;t available on this server.
+                Upload the original file instead.
               </p>
             )}
             <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

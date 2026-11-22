@@ -45,6 +45,7 @@ api = [
   "boto3>=1.34",
   "psycopg[binary]>=3.2",
   "cryptography>=42",
+  "yt-dlp>=2024.8.6",
 ]
 pipeline = [
   "faster-whisper>=1.0",
@@ -52,6 +53,7 @@ pipeline = [
   "opencv-python-headless>=4.9",
   "mediapipe>=0.10",
   "numpy>=1.26",
+  "yt-dlp>=2024.8.6",
 ]
 
 [project.scripts]
@@ -110,6 +112,7 @@ module = [
   "cv2",
   "numpy",
   "boto3", "boto3.*",
+  "yt_dlp", "yt_dlp.*",
 ]
 ignore_missing_imports = true
 

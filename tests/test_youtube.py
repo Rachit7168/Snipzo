@@ -188,14 +188,22 @@ def test_list_and_import_only_owned_videos(client: TestClient) -> None:
         json={"video_id": "vid-foreign", "rights_confirmed": True},
     )
     assert foreign.status_code == 403
-    owned = client.post(
-        f"/youtube/channels/{channel_id}/import",
-        headers=headers,
-        json={"video_id": "vid-own", "rights_confirmed": True},
-    )
-    # The Data API has no media download; this stays off unless yt-dlp is enabled.
-    assert owned.status_code == 501
-    assert "Ownership verified" in owned.json()["detail"]
+    from snipzo.api.settings import get_api_settings
+
+    monkeypatch = pytest.MonkeyPatch()
+    try:
+        monkeypatch.setenv("SNIPZO_YOUTUBE_IMPORT_DOWNLOADER", "disabled")
+        get_api_settings.cache_clear()
+        owned = client.post(
+            f"/youtube/channels/{channel_id}/import",
+            headers=headers,
+            json={"video_id": "vid-own", "rights_confirmed": True},
+        )
+        assert owned.status_code == 501
+        assert "turned off" in owned.json()["detail"]
+    finally:
+        monkeypatch.undo()
+        get_api_settings.cache_clear()
 
     other = register(client, "b@example.com")
     assert (
@@ -311,3 +319,30 @@ def test_takedown_request(client: TestClient) -> None:
     )
     assert ok.status_code == 201
     assert ok.json()["status"] == "received"
+
+
+def test_owned_import_downloads_with_ytdlp(
+    client: TestClient,
+    sample_video: Path,
+) -> None:
+    from snipzo.api import ytdlp
+    from tests.api_support import FakeYoutubeDownloader
+
+    fake = ytdlp.get_downloader()
+    assert isinstance(fake, FakeYoutubeDownloader)
+    fake.media_path = sample_video
+    headers = register(client)
+    channel_id = _connect(client, headers)
+    owned = client.post(
+        f"/youtube/channels/{channel_id}/import",
+        headers=headers,
+        json={"video_id": "vid-own", "rights_confirmed": True},
+    )
+    assert owned.status_code == 201, owned.text
+    project_id = owned.json()["project_id"]
+    detail = client.get(f"/projects/{project_id}", headers=headers).json()
+    assert detail["source_kind"] == "youtube"
+    assert detail["source_title"]
+    assert detail["source_thumbnail_url"]
+    assert detail["status"] == "complete", detail
+    assert fake.downloads

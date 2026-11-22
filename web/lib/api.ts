@@ -33,6 +33,9 @@ export type Project = {
   status: string;
   source_kind: string;
   source_filename: string | null;
+  source_title: string | null;
+  source_thumbnail_url: string | null;
+  source_page_url: string | null;
   duration_seconds: number | null;
   rights_confirmed: boolean;
   source_available: boolean;

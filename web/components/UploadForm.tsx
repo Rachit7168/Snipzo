@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 import { uploadProject } from "@/lib/api";
+import { checkSourceUrl } from "@/lib/youtubeUrl";
 
 export default function UploadForm({ token }: { token: string }) {
   const router = useRouter();
@@ -28,7 +29,13 @@ export default function UploadForm({ token }: { token: string }) {
       }
       form.set("file", file);
     } else {
-      form.set("source_url", String(source.get("source_url") || ""));
+      const pasted = String(source.get("source_url") || "");
+      const check = checkSourceUrl(pasted);
+      if (!check.ok) {
+        setError(check.error);
+        return;
+      }
+      form.set("source_url", pasted.trim());
     }
     setProgress(0);
     try {
@@ -71,11 +78,12 @@ export default function UploadForm({ token }: { token: string }) {
             className="input"
             name="source_url"
             type="url"
-            placeholder="https://example.com/talk.mp4"
+            placeholder="https://www.youtube.com/watch?v=… or a direct .mp4 link"
           />
           <p className="text-xs text-neutral-500">
-            Direct links to video files only. YouTube links are not supported; connect your channel
-            to import videos you own.
+            Paste any YouTube video link (watch, Shorts, youtu.be, live replay, or embed) or a
+            direct link to a video file. Playlists, channel pages, TikTok, and Instagram are not
+            supported. You must own or have rights to the content.
           </p>
         </div>
       )}

@@ -82,6 +82,8 @@ class ProjectRow(Base):
     source_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
     source_filename: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    source_title: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    source_thumbnail_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_deleted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

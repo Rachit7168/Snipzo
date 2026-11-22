@@ -234,20 +234,41 @@ def youtube_import(
     if settings.youtube_import_downloader == "disabled":
         raise HTTPException(
             status.HTTP_501_NOT_IMPLEMENTED,
-            "Ownership verified, but the YouTube Data API does not provide video "
-            "files. Upload the original file, or enable "
-            "SNIPZO_YOUTUBE_IMPORT_DOWNLOADER=yt-dlp on the worker.",
+            "Ownership verified, but YouTube import is turned off on this server. "
+            "Upload the original file, or set SNIPZO_YOUTUBE_IMPORT_DOWNLOADER=yt-dlp.",
         )
+    from snipzo.api.ytdlp import probe_youtube
+    from snipzo.youtube_url import canonical_watch_url, default_thumbnail_url
+
+    watch_url = canonical_watch_url(video.id)
+    source_title = video.title[:300]
+    source_thumb = default_thumbnail_url(video.id)
+    duration = None
+    try:
+        info = probe_youtube(watch_url)
+    except SnipzoError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    source_title = info.title or source_title
+    source_thumb = info.thumbnail_url or source_thumb
+    duration = info.duration
+    try:
+        if duration:
+            billing.check_minutes(db, user, settings, duration / 60.0)
+    except SnipzoError as exc:
+        raise HTTPException(status.HTTP_402_PAYMENT_REQUIRED, str(exc)) from exc
     project_id = new_project_id()
     db.add(
         ProjectRow(
             id=project_id,
             user_id=user.id,
-            title=video.title[:300],
+            title=source_title,
             status="queued",
             source_kind="youtube",
-            source_url=f"https://www.youtube.com/watch?v={video.id}",
+            source_url=watch_url,
             source_filename=f"{video.id}.mp4",
+            source_title=source_title,
+            source_thumbnail_url=source_thumb,
+            duration_seconds=duration,
             rights_confirmed=True,
         )
     )

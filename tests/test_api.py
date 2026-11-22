@@ -71,18 +71,18 @@ def test_upload_requires_rights_confirmation(
     assert "rights" in response.json()["detail"]
 
 
-def test_youtube_links_are_rejected(client: TestClient) -> None:
+def test_tiktok_links_are_still_rejected(client: TestClient) -> None:
     headers = register(client)
     response = client.post(
         "/projects",
         headers=headers,
         data={
             "rights_confirmed": "true",
-            "source_url": "https://www.youtube.com/watch?v=abc",
+            "source_url": "https://www.tiktok.com/@user/video/123",
         },
     )
     assert response.status_code == 400
-    assert "YouTube" in response.json()["detail"]
+    assert "TikTok" in response.json()["detail"]
 
 
 def test_upload_runs_pipeline_through_workers(
