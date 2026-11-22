@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -17,6 +18,7 @@ import httpx
 from snipzo.api.settings import ApiSettings
 from snipzo.errors import SnipzoError
 
+log = logging.getLogger(__name__)
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 API_URL = "https://www.googleapis.com/youtube/v3"
@@ -94,10 +96,8 @@ def is_configured(settings: ApiSettings) -> bool:
 
 def authorization_url(settings: ApiSettings, state: str) -> str:
     if not is_configured(settings):
-        raise YouTubeError(
-            "YouTube is not configured. Set SNIPZO_GOOGLE_CLIENT_ID and "
-            "SNIPZO_GOOGLE_CLIENT_SECRET."
-        )
+        log.warning("YouTube OAuth requested while Google credentials are unset")
+        raise YouTubeError("YouTube publishing is not available yet.")
     params = {
         "client_id": settings.google_client_id,
         "redirect_uri": settings.google_redirect_uri,

@@ -10,6 +10,7 @@ from pathlib import Path
 
 from snipzo.api.blobstore import BlobStore, get_blob_store
 from snipzo.api.db import session_scope
+from snipzo.api.errors import sanitize_publish_error
 from snipzo.api.settings import ApiSettings, get_api_settings
 from snipzo.api.tables import Channel, ClipRow, Job, Publication, RenderRow
 from snipzo.api.youtube import TokenCipher, YouTubeClient, YouTubeError, build_status
@@ -135,13 +136,13 @@ def run_publish(job_id: str) -> bool:
             job = session.get(Job, job_id)
             if job is not None:
                 job.status = "failed"
-                job.error = str(exc)[:4000]
+                job.error = sanitize_publish_error(exc)
             publication = (
                 session.get(Publication, publication_id) if publication_id else None
             )
             if publication is not None:
                 publication.status = "failed"
-                publication.error = str(exc)[:4000]
+                publication.error = sanitize_publish_error(exc)
         return False
     finally:
         shutil.rmtree(scratch, ignore_errors=True)

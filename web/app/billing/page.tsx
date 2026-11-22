@@ -3,10 +3,13 @@
 import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useState } from "react";
 
+import { useToast } from "@/components/Toast";
 import { apiFetch, type BillingUsage, type PlanInfo } from "@/lib/api";
+import { mapApiError } from "@/lib/errors";
 
 export default function BillingPage() {
   const { data: session } = useSession();
+  const { showToast } = useToast();
   const token = session?.accessToken;
   const [plans, setPlans] = useState<PlanInfo[]>([]);
   const [usage, setUsage] = useState<BillingUsage | null>(null);
@@ -25,10 +28,13 @@ export default function BillingPage() {
   }, [token]);
 
   useEffect(() => {
-    load().catch((err: Error) => setError(err.message));
+    load().catch((err: unknown) => {
+      const mapped = mapApiError(err, "Could not load billing details.");
+      setError(mapped.message);
+    });
     const params = new URLSearchParams(window.location.search);
     if (params.get("checkout") === "success") {
-      setNotice("Subscription updated. Changes appear once Stripe confirms the webhook.");
+      setNotice("Subscription updated. Changes appear once billing confirms.");
     }
     if (params.get("checkout") === "cancelled") {
       setNotice("Checkout cancelled.");
@@ -45,7 +51,9 @@ export default function BillingPage() {
       });
       window.location.assign(res.url);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not open Stripe Checkout.");
+      const mapped = mapApiError(err, "Could not start checkout.");
+      setError(mapped.message);
+      showToast({ title: mapped.title, message: mapped.message, tone: "error" });
       setBusyPlan(null);
     }
   }
@@ -57,11 +65,20 @@ export default function BillingPage() {
       const res = await apiFetch<{ url: string }>("/billing/portal", token, { method: "POST" });
       window.location.assign(res.url);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not open billing portal.");
+      const mapped = mapApiError(err, "Could not open billing portal.");
+      setError(mapped.message);
+      showToast({ title: mapped.title, message: mapped.message, tone: "error" });
       setBusyPlan(null);
     }
   }
 
+  if (error && !usage) {
+    return (
+      <div role="alert" className="card border-red-500/30 text-sm text-red-300">
+        {error}
+      </div>
+    );
+  }
   if (!token || !usage) return <p className="text-neutral-400">Loading billing...</p>;
 
   const videoPct = Math.min(100, Math.round((usage.videos_used / usage.plan.videos_per_month) * 100));
@@ -78,7 +95,7 @@ export default function BillingPage() {
             {usage.plan.watermark ? ", watermarked" : ", no watermark"})
           </p>
         </div>
-        {usage.has_subscription && (
+        {usage.has_subscription && usage.billing_configured && (
           <button className="btn-ghost" onClick={openPortal} disabled={busyPlan === "portal"}>
             {busyPlan === "portal" ? "Opening..." : "Manage subscription"}
           </button>
@@ -86,12 +103,14 @@ export default function BillingPage() {
       </div>
 
       {notice && <p className="text-sm text-emerald-300">{notice}</p>}
-      {error && <p className="text-sm text-red-400">{error}</p>}
+      {error && (
+        <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+          {error}
+        </div>
+      )}
       {!usage.billing_configured && (
-        <p className="card text-sm text-yellow-300">
-          Stripe is not configured on this server. Set SNIPZO_STRIPE_SECRET_KEY,
-          SNIPZO_STRIPE_WEBHOOK_SECRET, SNIPZO_STRIPE_PRICE_CREATOR, and SNIPZO_STRIPE_PRICE_PRO
-          to enable upgrades.
+        <p className="card text-sm text-neutral-300">
+          Upgrades are temporarily unavailable. You can continue using your current {usage.plan.name} plan.
         </p>
       )}
 
@@ -123,6 +142,7 @@ export default function BillingPage() {
       <section className="grid gap-5 md:grid-cols-3">
         {plans.map((plan) => {
           const isCurrent = plan.id === usage.plan.id;
+          const showUpgrade = !isCurrent && plan.id !== "free" && usage.billing_configured && plan.purchasable;
           return (
             <div
               key={plan.id}
@@ -136,7 +156,9 @@ export default function BillingPage() {
                 </p>
               </div>
               <ul className="space-y-1 text-sm text-neutral-300">
-                <li>{plan.videos_per_month} videos / month</li>
+                <li>
+                  {plan.videos_per_month} {plan.videos_per_month === 1 ? "video" : "videos"} / month
+                </li>
                 <li>{plan.minutes_per_month} source minutes / month</li>
                 {plan.features.map((feat) => (
                   <li key={feat}>· {feat}</li>
@@ -145,15 +167,15 @@ export default function BillingPage() {
               <div className="mt-auto">
                 {isCurrent ? (
                   <span className="btn-ghost w-full cursor-default text-center">Current plan</span>
-                ) : plan.id === "free" ? null : (
+                ) : showUpgrade ? (
                   <button
                     className="btn w-full"
-                    disabled={!plan.purchasable || busyPlan !== null}
+                    disabled={busyPlan !== null}
                     onClick={() => startCheckout(plan.id as "creator" | "pro")}
                   >
                     {busyPlan === plan.id ? "Redirecting..." : `Upgrade to ${plan.name}`}
                   </button>
-                )}
+                ) : null}
               </div>
             </div>
           );

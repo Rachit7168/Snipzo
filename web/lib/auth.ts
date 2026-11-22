@@ -18,14 +18,22 @@ export const authOptions: NextAuthOptions = {
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials.password) return null;
-        const response = await fetch(`${serverApiUrl()}/auth/login`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            email: credentials.email,
-            password: credentials.password,
-          }),
-        });
+        let response: Response;
+        try {
+          response = await fetch(`${serverApiUrl()}/auth/login`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              email: credentials.email,
+              password: credentials.password,
+            }),
+          });
+        } catch {
+          throw new Error("SERVICE_UNAVAILABLE");
+        }
+        if (response.status >= 500) {
+          throw new Error("SERVICE_UNAVAILABLE");
+        }
         if (!response.ok) return null;
         const data = await response.json();
         return {

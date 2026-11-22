@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from snipzo.api.blobstore import BlobStore, get_blob_store, render_key, source_key
 from snipzo.api.db import session_scope
+from snipzo.api.errors import sanitize_job_error
 from snipzo.api.settings import ApiSettings, get_api_settings
 from snipzo.api.tables import ClipRow, Job, ProjectRow, RenderRow, TranscriptRow, User
 from snipzo.config import Settings, get_settings
@@ -250,7 +251,7 @@ def run_ingest_and_transcribe(job_id: str) -> bool:
         _update_job(
             job_id,
             status="failed",
-            error=str(exc) or type(exc).__name__,
+            error=sanitize_job_error(exc),
             project_status="failed",
         )
         return False
@@ -285,7 +286,7 @@ def run_highlights_and_render(job_id: str) -> bool:
         _update_job(
             job_id,
             status="failed",
-            error=str(exc) or type(exc).__name__,
+            error=sanitize_job_error(exc),
             project_status="failed",
         )
         return False
@@ -322,7 +323,7 @@ def run_rerender(job_id: str) -> bool:
         return True
     except Exception as exc:
         log.exception("re-render failed for job %s", job_id)
-        _update_job(job_id, status="failed", error=str(exc) or type(exc).__name__)
+        _update_job(job_id, status="failed", error=sanitize_job_error(exc))
         return False
 
 

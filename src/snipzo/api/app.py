@@ -2,15 +2,27 @@
 
 from __future__ import annotations
 
+import logging
 import mimetypes
 import shutil
 import tempfile
+import uuid
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, FastAPI, File, Form, HTTPException, UploadFile, status
+from fastapi import (
+    APIRouter,
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    UploadFile,
+    status,
+)
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
@@ -39,6 +51,7 @@ from snipzo.errors import SnipzoError
 from snipzo.ingest.service import new_project_id
 
 ALLOWED_SUFFIXES = {".mp4", ".mov", ".mkv", ".webm", ".m4v", ".avi"}
+log = logging.getLogger(__name__)
 
 
 def user_out(user: User) -> UserOut:
@@ -521,6 +534,38 @@ def submit_takedown(body: TakedownIn, db: DbSession) -> dict[str, str]:
 def create_app(settings: ApiSettings | None = None) -> FastAPI:
     cfg = settings or get_api_settings()
     application = FastAPI(title="Snipzo API", version=__version__)
+
+    @application.middleware("http")
+    async def attach_request_id(
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        request_id = request.headers.get("x-request-id") or uuid.uuid4().hex[:12]
+        request.state.request_id = request_id
+        response = await call_next(request)
+        response.headers.setdefault("X-Request-Id", request_id)
+        return response
+
+    @application.exception_handler(Exception)
+    async def unhandled_exception_handler(
+        request: Request, exc: Exception
+    ) -> JSONResponse:
+        request_id = getattr(request.state, "request_id", None) or uuid.uuid4().hex[:12]
+        log.exception(
+            "Unhandled error [request_id=%s] %s %s",
+            request_id,
+            request.method,
+            request.url.path,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "detail": "Something went wrong on our side. Please try again.",
+                "request_id": request_id,
+            },
+            headers={"X-Request-Id": request_id},
+        )
+
     application.add_middleware(
         CORSMiddleware,
         allow_origins=cfg.cors_origin_list(),

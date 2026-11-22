@@ -48,9 +48,13 @@ export type Project = {
 
 export class ApiError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  detail: unknown;
+  requestId?: string;
+  constructor(status: number, message: string, detail?: unknown, requestId?: string) {
     super(message);
     this.status = status;
+    this.detail = detail;
+    this.requestId = requestId;
   }
 }
 
@@ -64,16 +68,27 @@ export async function apiFetch<T>(
   if (init.body && !(init.body instanceof FormData)) {
     headers.set("content-type", "application/json");
   }
-  const response = await fetch(`${API_URL}${path}`, { ...init, headers });
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, { ...init, headers });
+  } catch {
+    throw new ApiError(0, "Service unavailable");
+  }
   if (!response.ok) {
-    let detail = response.statusText;
+    let rawDetail: unknown = undefined;
+    let requestId: string | undefined = response.headers.get("x-request-id") || undefined;
+    let message = response.statusText || "Request failed";
     try {
-      const body = await response.json();
-      detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
+      const body = (await response.json()) as { detail?: unknown; request_id?: string };
+      rawDetail = body?.detail;
+      if (body?.request_id) requestId = body.request_id;
+      if (typeof body?.detail === "string" && body.detail.trim()) {
+        message = body.detail;
+      }
     } catch {
       // keep statusText
     }
-    throw new ApiError(response.status, detail);
+    throw new ApiError(response.status, message, rawDetail, requestId);
   }
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
@@ -93,20 +108,22 @@ export function uploadProject(
       if (event.lengthComputable) onProgress(event.loaded / event.total);
     };
     xhr.onload = () => {
-      let body: unknown = null;
+      let body: { detail?: unknown; request_id?: string } | null = null;
       try {
         body = JSON.parse(xhr.responseText);
       } catch {
         // ignore
       }
       if (xhr.status >= 200 && xhr.status < 300) {
-        resolve(body as Project);
+        resolve(body as unknown as Project);
       } else {
-        const detail = (body as { detail?: unknown } | null)?.detail;
-        reject(new ApiError(xhr.status, typeof detail === "string" ? detail : xhr.statusText));
+        const detail = body?.detail;
+        const message =
+          typeof detail === "string" && detail.trim() ? detail : xhr.statusText || "Upload failed";
+        reject(new ApiError(xhr.status, message, detail, body?.request_id));
       }
     };
-    xhr.onerror = () => reject(new ApiError(0, "Network error: is the API running?"));
+    xhr.onerror = () => reject(new ApiError(0, "Service unavailable"));
     xhr.send(form);
   });
 }

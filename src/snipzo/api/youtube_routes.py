@@ -235,7 +235,7 @@ def youtube_import(
         raise HTTPException(
             status.HTTP_501_NOT_IMPLEMENTED,
             "Ownership verified, but YouTube import is turned off on this server. "
-            "Upload the original file, or set SNIPZO_YOUTUBE_IMPORT_DOWNLOADER=yt-dlp.",
+            "Upload the original file instead.",
         )
     from snipzo.api.ytdlp import probe_youtube
     from snipzo.youtube_url import canonical_watch_url, default_thumbnail_url

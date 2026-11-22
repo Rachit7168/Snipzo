@@ -4,11 +4,14 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useState } from "react";
 
+import { useToast } from "@/components/Toast";
 import { apiFetch, type OwnedVideo, type YouTubeStatus } from "@/lib/api";
+import { mapApiError } from "@/lib/errors";
 
 export default function ChannelsPage() {
   const router = useRouter();
   const { data: session } = useSession();
+  const { showToast } = useToast();
   const token = session?.accessToken;
   const [status, setStatus] = useState<YouTubeStatus | null>(null);
   const [videos, setVideos] = useState<Record<string, OwnedVideo[]>>({});
@@ -23,15 +26,21 @@ export default function ChannelsPage() {
     for (const channel of data.channels) {
       apiFetch<OwnedVideo[]>(`/youtube/channels/${channel.id}/videos`, token)
         .then((items) => setVideos((prev) => ({ ...prev, [channel.id]: items })))
-        .catch((err: Error) => setError(err.message));
+        .catch((err: unknown) => {
+          const mapped = mapApiError(err, "Could not load channel videos.");
+          setError(mapped.message);
+        });
     }
   }, [token]);
 
   useEffect(() => {
-    load().catch((err: Error) => setError(err.message));
+    load().catch((err: unknown) => {
+      const mapped = mapApiError(err, "Could not load channels.");
+      setError(mapped.message);
+    });
     const params = new URLSearchParams(window.location.search);
     if (params.get("connected")) setMessage("YouTube channel connected.");
-    if (params.get("error")) setError(`Google sign-in was not completed (${params.get("error")}).`);
+    if (params.get("error")) setError("Google sign-in was cancelled or could not be completed.");
   }, [load]);
 
   async function connect() {
@@ -39,13 +48,22 @@ export default function ChannelsPage() {
       const { auth_url } = await apiFetch<{ auth_url: string }>("/youtube/connect", token);
       window.location.assign(auth_url);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not start Google sign-in.");
+      const mapped = mapApiError(err, "Could not start Google sign-in.");
+      setError(mapped.message);
+      showToast({ title: mapped.title, message: mapped.message, tone: "error" });
     }
   }
 
   async function disconnect(channelId: string) {
-    await apiFetch(`/youtube/channels/${channelId}`, token, { method: "DELETE" });
-    await load();
+    try {
+      await apiFetch(`/youtube/channels/${channelId}`, token, { method: "DELETE" });
+      await load();
+      showToast({ title: "Channel disconnected", message: "Removed your YouTube channel.", tone: "success" });
+    } catch (err) {
+      const mapped = mapApiError(err, "Could not disconnect channel.");
+      setError(mapped.message);
+      showToast({ title: mapped.title, message: mapped.message, tone: "error" });
+    }
   }
 
   async function importVideo(channelId: string, videoId: string) {
@@ -58,7 +76,9 @@ export default function ChannelsPage() {
       );
       router.push(`/projects/${result.project_id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Import failed.");
+      const mapped = mapApiError(err, "Import failed.");
+      setError(mapped.message);
+      showToast({ title: mapped.title, message: mapped.message, tone: "error" });
     }
   }
 
@@ -73,18 +93,23 @@ export default function ChannelsPage() {
             Connect your YouTube channel to publish Shorts directly and import videos you own.
           </p>
         </div>
-        <button className="btn" onClick={connect} disabled={!status.configured}>
-          Connect YouTube
-        </button>
+        {status.configured && (
+          <button className="btn" onClick={connect}>
+            Connect YouTube
+          </button>
+        )}
       </div>
       {!status.configured && (
-        <p className="card text-sm text-yellow-300">
-          YouTube is not configured on this server. Set SNIPZO_GOOGLE_CLIENT_ID and
-          SNIPZO_GOOGLE_CLIENT_SECRET on the API.
+        <p className="card text-sm text-neutral-300">
+          YouTube publishing is not available yet. You can still paste any YouTube video link on the dashboard to make Shorts.
         </p>
       )}
       {message && <p className="text-sm text-emerald-300">{message}</p>}
-      {error && <p className="text-sm text-red-400">{error}</p>}
+      {error && (
+        <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+          {error}
+        </div>
+      )}
       {status.channels.length === 0 ? (
         <p className="card text-neutral-400">No channels connected yet.</p>
       ) : (
@@ -105,8 +130,7 @@ export default function ChannelsPage() {
             </label>
             {!status.import_enabled && (
               <p className="text-xs text-neutral-500">
-                Import can verify ownership, but downloading isn&apos;t available on this server.
-                Upload the original file instead.
+                Channel import isn&apos;t available right now. Upload the original file instead.
               </p>
             )}
             <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 
+import { useToast } from "@/components/Toast";
 import { apiFetch, type Clip, type Publication, type YouTubeStatus } from "@/lib/api";
+import { mapApiError, sanitizeJobErrorText } from "@/lib/errors";
 
 export default function PublishPanel({
   projectId,
@@ -14,6 +16,7 @@ export default function PublishPanel({
   clips: Clip[];
   token: string;
 }) {
+  const { showToast } = useToast();
   const [status, setStatus] = useState<YouTubeStatus | null>(null);
   const [publications, setPublications] = useState<Publication[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -30,7 +33,7 @@ export default function PublishPanel({
   }, [projectId, token]);
 
   useEffect(() => {
-    load().catch((err: Error) => setError(err.message));
+    load().catch((err: unknown) => setError(mapApiError(err, "Could not load publish status.").message));
   }, [load]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -56,14 +59,18 @@ export default function PublishPanel({
         if (!pubs.some((pub) => ["queued", "uploading"].includes(pub.status))) break;
         await new Promise((resolve) => setTimeout(resolve, 3000));
       }
+      showToast({ title: "Publish updated", message: "Check the status below.", tone: "success" });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Publish failed.");
+      const mapped = mapApiError(err, "Publish failed.");
+      setError(mapped.message);
+      showToast({ title: mapped.title, message: mapped.message, tone: "error" });
     } finally {
       setBusy(false);
     }
   }
 
   if (!status) return null;
+  if (!status.configured) return null;
   if (status.channels.length === 0) {
     return (
       <p className="card text-sm text-neutral-400">
@@ -79,21 +86,21 @@ export default function PublishPanel({
     <section className="card space-y-4">
       <h2 className="text-lg font-semibold">Publish to YouTube</h2>
       <form onSubmit={onSubmit} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <select name="clip_id" className="input">
+        <select name="clip_id" aria-label="Clip" className="input">
           {clips.map((clip) => (
             <option key={clip.clip_id} value={clip.clip_id}>
               {clip.clip_id}: {clip.title || clip.hook_title}
             </option>
           ))}
         </select>
-        <select name="channel_id" className="input">
+        <select name="channel_id" aria-label="Channel" className="input">
           {status.channels.map((channel) => (
             <option key={channel.id} value={channel.id}>
               {channel.title || channel.external_id}
             </option>
           ))}
         </select>
-        <select name="privacy_status" className="input" defaultValue="private">
+        <select name="privacy_status" aria-label="Visibility" className="input" defaultValue="private">
           <option value="private">Private</option>
           <option value="unlisted">Unlisted</option>
           <option value="public">Public</option>
@@ -115,7 +122,11 @@ export default function PublishPanel({
           {busy ? "Publishing..." : "Publish"}
         </button>
       </form>
-      {error && <p className="text-sm text-red-400">{error}</p>}
+      {error && (
+        <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+          {error}
+        </div>
+      )}
       {publications.length > 0 && (
         <ul className="space-y-1 text-sm">
           {publications.map((pub) => (
@@ -128,7 +139,7 @@ export default function PublishPanel({
                   {pub.url}
                 </a>
               )}
-              {pub.error && <span className="text-red-400">{pub.error}</span>}
+              {pub.error && <span className="text-red-400">{sanitizeJobErrorText(pub.error)}</span>}
             </li>
           ))}
         </ul>
