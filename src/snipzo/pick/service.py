@@ -31,8 +31,14 @@ MAX_OVERLAP = 0.4
 
 def get_scorer(settings: Settings) -> ClipScorer:
     """Return Claude when an API key is configured, otherwise the heuristic."""
-    if settings.anthropic_api_key:
-        return ClaudeScorer(settings.anthropic_api_key, model=settings.anthropic_model)
+    api_key = (settings.anthropic_api_key or "").strip()
+    if api_key:
+        return ClaudeScorer(api_key, model=settings.anthropic_model)
+    if settings.require_llm_metadata:
+        raise SnipzoError(
+            "LLM clip scoring is required (SNIPZO_REQUIRE_LLM_METADATA=true) "
+            "but SNIPZO_ANTHROPIC_API_KEY is not set."
+        )
     return HeuristicScorer()
 
 
@@ -81,17 +87,25 @@ def pick_clips(
     if scorer is not None:
         scores = scorer.score(candidates, transcript)
         used_name = getattr(scorer, "name", "custom")
-    elif settings.anthropic_api_key:
+    elif (settings.anthropic_api_key or "").strip():
         try:
             claude = ClaudeScorer(
-                settings.anthropic_api_key, model=settings.anthropic_model
+                (settings.anthropic_api_key or "").strip(),
+                model=settings.anthropic_model,
             )
             scores = claude.score(candidates, transcript)
             used_name = claude.name
         except SnipzoError:
+            if settings.require_llm_metadata:
+                raise
             scores = HeuristicScorer().score(candidates, transcript)
             used_name = "heuristic-fallback"
     else:
+        if settings.require_llm_metadata:
+            raise SnipzoError(
+                "LLM clip scoring is required (SNIPZO_REQUIRE_LLM_METADATA=true) "
+                "but SNIPZO_ANTHROPIC_API_KEY is not set."
+            )
         scores = HeuristicScorer().score(candidates, transcript)
         used_name = "heuristic"
 

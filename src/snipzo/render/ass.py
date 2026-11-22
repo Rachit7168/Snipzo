@@ -30,19 +30,46 @@ def words_for_clip(transcript: Transcript, clip: Clip) -> list[Word]:
     return relative
 
 
+_LEADING_HOOK_FILLERS = frozenset(
+    "you know like uh um er ah so yeah yes well basically actually right".split()
+)
+_DANGLING_HOOK_END = frozenset(
+    "a an the and or but so to of in on for with at from by is are was were my your you"
+    .split()
+)
+
+
 def hook_title_from_words(clip: Clip, words: Sequence[Word], limit: int = 80) -> str:
-    """Use a stored hook title, or the first sentence / first eight words."""
+    """Use a stored hook title, or extract a clean opening clause without fillers."""
     if clip.hook_title and clip.hook_title.strip():
         return _trim(clip.hook_title.strip(), limit)
     if not words:
         return "Watch this"
+    # Skip leading spoken filler words when enough words follow.
+    idx = 0
+    while idx < len(words) - 3:
+        clean = words[idx].text.strip(" ,.!?;:").lower()
+        if clean in _LEADING_HOOK_FILLERS:
+            idx += 1
+            continue
+        break
     parts: list[str] = []
-    for word in words:
+    ended_cleanly = False
+    for word in words[idx:]:
         parts.append(word.text)
         token = word.text.strip()
-        if token.endswith((".", "!", "?")) or len(parts) >= 8:
+        if token.endswith((".", "!", "?")):
+            ended_cleanly = True
             break
-    title = re.sub(r"\s+", " ", " ".join(parts)).strip()
+        if len(parts) >= 8:
+            break
+    if not ended_cleanly:
+        while (
+            len(parts) > 3
+            and parts[-1].strip(" ,.!?;:").lower() in _DANGLING_HOOK_END
+        ):
+            parts.pop()
+    title = re.sub(r"\s+", " ", " ".join(parts)).strip(" ,;:-")
     return _trim(title or "Watch this", limit)
 
 

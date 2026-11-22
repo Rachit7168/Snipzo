@@ -42,6 +42,13 @@ class Settings(BaseSettings):
         default="claude-sonnet-4-5",
         description="Claude model used for clip scoring and metadata.",
     )
+    require_llm_metadata: bool = Field(
+        default=False,
+        description=(
+            "Fail loudly if SNIPZO_ANTHROPIC_API_KEY is missing or Claude fails "
+            "(enable in staging/production to prevent heuristic fallback)."
+        ),
+    )
     clip_count: int = Field(
         default=5,
         description="Number of highlight clips to select.",

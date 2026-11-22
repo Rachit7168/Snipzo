@@ -80,6 +80,23 @@ def test_hook_title_falls_back_to_first_words() -> None:
     assert hook_title_from_words(clip, words) == "Here is the secret."
 
 
+def test_hook_title_strips_leading_fillers_and_dangling_end() -> None:
+    clip = Clip(id="clip-01", start=0, end=5, score=0.5, reason="t")
+    words = [
+        Word(text=t, start=i * 0.2, end=i * 0.2 + 0.2)
+        for i, t in enumerate(
+            [
+                "you", "know,", "like", "Education", "builds",
+                "every", "nation", "and", "you", "see",
+            ]
+        )
+    ]
+    hook = hook_title_from_words(clip, words)
+    assert not hook.lower().startswith("you know")
+    assert not hook.lower().endswith(" and")
+    assert "Education builds every nation" in hook
+
+
 def test_words_for_clip_are_relative() -> None:
     clip = Clip(id="clip-01", start=10.0, end=12.0, score=0.5, reason="t")
     transcript = Transcript(
