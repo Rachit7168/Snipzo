@@ -134,6 +134,52 @@ docker build -t snipzo .
 docker run --rm snipzo --version
 ```
 
+## Backend API and workers
+
+The `api` extra adds a FastAPI service, Celery workers, a SQLAlchemy/Alembic data model (`users`, `channels`, `projects`, `transcripts`, `clips`, `renders`, `publications`, `jobs`), and blob storage on S3/Cloudflare R2 with a local-filesystem fallback.
+
+```bash
+pip install -e ".[dev,api,pipeline]"
+```
+
+### With Docker
+
+```bash
+docker compose up --build
+# API docs: http://localhost:8000/docs
+```
+
+This starts `postgres`, `redis`, `api` (runs `snipzo db upgrade`, then uvicorn), `worker` (Celery, queues `gpu` and `cpu`), and `beat` (daily source cleanup).
+
+### Without Docker
+
+```bash
+export SNIPZO_DATABASE_URL=sqlite:///./data/snipzo.db   # or a postgresql+psycopg:// URL
+export SNIPZO_REDIS_URL=redis://localhost:6379/0
+snipzo db upgrade
+uvicorn snipzo.api.app:app --reload --port 8000
+celery -A snipzo.api.worker worker -Q gpu,cpu --loglevel=INFO   # second terminal
+celery -A snipzo.api.worker beat --loglevel=INFO                 # optional: cleanup
+```
+
+No Redis? Set `SNIPZO_CELERY_EAGER=true` and jobs run inline in the API process (fine for a laptop demo; uploads block until the Shorts are rendered).
+
+### Using the API
+
+```bash
+TOKEN=$(curl -s localhost:8000/auth/register -H 'content-type: application/json' \
+  -d '{"email":"me@example.com","password":"a-long-password"}' | python -c 'import sys,json;print(json.load(sys.stdin)["access_token"])')
+curl -s localhost:8000/projects -H "Authorization: Bearer $TOKEN" \
+  -F rights_confirmed=true -F file=@video.mp4
+curl -s localhost:8000/projects/<id> -H "Authorization: Bearer $TOKEN"   # job progress + clips
+```
+
+Each clip in the response has a signed, expiring `download_url` (usable directly in a `<video>` tag). You can also pass `-F source_url=https://.../video.mp4` instead of a file; YouTube/TikTok/Instagram page links are rejected.
+
+Jobs run in two Celery tasks: `snipzo.ingest_transcribe` on the `gpu` queue (Whisper), then `snipzo.highlights_render` on the `cpu` queue (pick, metadata, reframe, FFmpeg render). Run separate workers per queue in production (`-Q gpu` on GPU hosts, `-Q cpu` elsewhere). All workers must share `SNIPZO_WORK_DIR` (or a volume).
+
+Storage: set `SNIPZO_STORAGE_BACKEND=s3`, `SNIPZO_S3_BUCKET`, `SNIPZO_S3_ENDPOINT_URL` (for R2: `https://<account>.r2.cloudflarestorage.com`), and the access keys. Source videos are deleted after `SNIPZO_SOURCE_RETENTION_DAYS` (default 14, max 30) by the `snipzo.cleanup_sources` beat task; you can also add a matching bucket lifecycle rule on the `sources/` prefix.
+
 ## Project layout
 
 ```
@@ -148,6 +194,7 @@ src/snipzo/
   metadata/       # Step 7: titles, descriptions, hashtags
   pipeline.py     # Step 8: snipzo run (resumable)
   eval/           # Step 8: ratings CSV harness
+  api/            # Step 9: FastAPI app, Celery worker, DB models, blob storage
 ```
 
 PRs should target the `dev` branch, not `main`.
