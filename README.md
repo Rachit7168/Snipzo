@@ -207,6 +207,18 @@ Open a project in the web app and click **Edit** on any Short (`/projects/<id>/c
 
 API: `GET /projects/{id}/clips/{clip_id}/editor` and `PATCH /projects/{id}/clips/{clip_id}` (body fields: `start`, `end`, `hook_title`, `title`, `description`, `hashtags`, `style_id`, `captions`, `rerender`). Edits are stored in the project folder (`clips.json`, `renders/<clip>.json`, `edits/<clip>.json`). Editing requires the source video, so it stops working once the source retention window has passed.
 
+## YouTube: connect, import, publish
+
+1. In Google Cloud, enable **YouTube Data API v3**, create an OAuth client (Web application), and add `http://localhost:8000/youtube/callback` (or your `SNIPZO_GOOGLE_REDIRECT_URI`) as a redirect URI. Start Google's app verification early; the `youtube.upload` scope is sensitive and review can take weeks.
+2. Set `SNIPZO_GOOGLE_CLIENT_ID`, `SNIPZO_GOOGLE_CLIENT_SECRET`, `SNIPZO_TOKEN_ENCRYPTION_KEY` (Fernet), and `SNIPZO_WEB_APP_URL` on the API and workers.
+3. In the web app, open **Channels → Connect YouTube**. Tokens are stored encrypted (Fernet) and refreshed automatically.
+
+- **Import**: lists videos from your channel's own uploads playlist; `POST /youtube/channels/{id}/import` checks the video's `channelId` matches your connected channel (403 otherwise) and requires the rights checkbox. The Data API does not provide media files, so by default import stops after verifying ownership (HTTP 501, with a message to upload the original). Set `SNIPZO_YOUTUBE_IMPORT_DOWNLOADER=yt-dlp` and install `yt-dlp` on workers to fetch owned videos.
+- **Publish**: `POST /projects/{id}/clips/{clip_id}/publish` (and the Publish panel on a project) runs a resumable `videos.insert` upload on the worker with title/description/tags, privacy, optional scheduling (`publishAt`, forced private as YouTube requires), `selfDeclaredMadeForKids`, and the altered/synthetic content disclosure (`containsSyntheticMedia`). Requires the rights confirmation.
+- **Legal**: the web app ships template `/privacy` (incl. Google API Services User Data Policy / Limited Use), `/terms`, and `/takedown` pages; notices are stored via `POST /takedown`. Operator process: [docs/TAKEDOWN.md](docs/TAKEDOWN.md).
+
+Tests mock every Google call; no real credentials are needed to run them.
+
 ## Project layout
 
 ```
