@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import shutil
-import subprocess
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
@@ -41,28 +40,16 @@ def fresh_access_token(
 
 
 def download_owned_video(url: str, dest: Path) -> Path:
-    """Fetch an owned YouTube video with yt-dlp (only when explicitly enabled)."""
-    if shutil.which("yt-dlp") is None:
-        raise SnipzoError("yt-dlp is not installed on the worker.")
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    result = subprocess.run(
-        [
-            "yt-dlp",
-            "-f",
-            "mp4/bestvideo+bestaudio",
-            "--merge-output-format",
-            "mp4",
-            "-o",
-            str(dest),
-            url,
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
+    """Fetch a YouTube video with yt-dlp (shared with pasted-URL imports)."""
+    from snipzo.api.ytdlp import download_youtube
+
+    settings = get_api_settings()
+    return download_youtube(
+        url,
+        dest,
+        max_bytes=settings.max_upload_mb * 2**20,
+        timeout=settings.youtube_download_timeout,
     )
-    if result.returncode != 0 or not dest.is_file():
-        raise SnipzoError(f"yt-dlp failed: {result.stderr.strip()[-300:]}")
-    return dest
 
 
 def _render_file(store: BlobStore, key: str, scratch: Path) -> Path:

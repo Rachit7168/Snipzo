@@ -61,6 +61,9 @@ class ProjectOut(BaseModel):
     status: str
     source_kind: str
     source_filename: str | None = None
+    source_title: str | None = None
+    source_thumbnail_url: str | None = None
+    source_page_url: str | None = None
     duration_seconds: float | None = None
     rights_confirmed: bool
     source_available: bool

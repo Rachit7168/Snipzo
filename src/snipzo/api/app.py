@@ -104,6 +104,9 @@ def project_out(row: ProjectRow, settings: ApiSettings, *, clips: bool) -> Proje
         status=row.status,
         source_kind=row.source_kind,
         source_filename=row.source_filename,
+        source_title=row.source_title,
+        source_thumbnail_url=row.source_thumbnail_url,
+        source_page_url=row.source_url if row.source_kind == "youtube" else None,
         duration_seconds=row.duration_seconds,
         rights_confirmed=row.rights_confirmed,
         source_available=row.source_deleted_at is None,
@@ -171,7 +174,7 @@ def create_project(
     source_url: Annotated[str | None, Form()] = None,
     file: Annotated[UploadFile | None, File()] = None,
 ) -> ProjectOut:
-    """Upload a video (or give a direct file URL) and start processing."""
+    """Upload a video, paste a YouTube link, or give a direct file URL."""
     if not rights_confirmed:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
@@ -209,12 +212,15 @@ def create_project(
         if not settings.url_import_enabled:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "URL import is disabled.")
         try:
-            url = jobs.validate_source_url(source_url or "")
+            kind, url = jobs.classify_source_url(source_url or "")
         except SnipzoError as exc:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
-        row.source_kind = "url"
-        row.source_url = url
-        row.source_filename = Path(url.split("?", 1)[0]).name or "source.mp4"
+        if kind == "youtube":
+            _prepare_youtube_project(db, user, settings, row, url)
+        else:
+            row.source_kind = "url"
+            row.source_url = url
+            row.source_filename = Path(url.split("?", 1)[0]).name or "source.mp4"
     row.title = row.title or Path(row.source_filename or "video").stem
     db.add(row)
     job = Job(project_id=project_id, kind="pipeline", status="queued")
@@ -224,6 +230,42 @@ def create_project(
     db.expire_all()
     fresh = owned_project(db, user, project_id)
     return project_out(fresh, settings, clips=True)
+
+
+
+def _prepare_youtube_project(
+    db: DbSession,
+    user: User,
+    settings: ApiSettings,
+    row: ProjectRow,
+    url: str,
+) -> None:
+    """Probe a YouTube URL, enforce plan minutes, and fill preview fields."""
+    if settings.youtube_import_downloader == "disabled":
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "YouTube import is turned off on this server. Upload the file instead.",
+        )
+    from snipzo.api.ytdlp import probe_youtube
+
+    try:
+        info = probe_youtube(url)
+    except SnipzoError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    try:
+        if info.duration:
+            billing.check_minutes(db, user, settings, info.duration / 60.0)
+    except SnipzoError as exc:
+        raise HTTPException(status.HTTP_402_PAYMENT_REQUIRED, str(exc)) from exc
+    row.source_kind = "youtube"
+    row.source_url = info.url
+    row.source_filename = f"{info.video_id}.mp4"
+    row.source_title = info.title
+    row.source_thumbnail_url = info.thumbnail_url
+    if info.duration:
+        row.duration_seconds = info.duration
+    if not row.title:
+        row.title = info.title
 
 
 def _store_upload(file: UploadFile, key: str, settings: ApiSettings) -> None:

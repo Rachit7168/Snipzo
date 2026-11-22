@@ -68,7 +68,7 @@ class ApiSettings(BaseSettings):
     max_upload_mb: int = Field(default=2048)
     url_import_enabled: bool = Field(
         default=True,
-        description="Allow importing direct video file URLs (not YouTube pages).",
+        description="Allow importing a YouTube or direct video URL.",
     )
 
     web_app_url: str = Field(
@@ -89,8 +89,22 @@ class ApiSettings(BaseSettings):
         "SNIPZO_SECRET_KEY when unset).",
     )
     youtube_import_downloader: Literal["disabled", "yt-dlp"] = Field(
-        default="disabled",
-        description="How to fetch media for owned YouTube imports.",
+        default="yt-dlp",
+        description="How to fetch YouTube media for pasted and owned imports.",
+    )
+    youtube_download_timeout: int = Field(
+        default=600,
+        ge=30,
+        le=3600,
+        description="Seconds allowed for a YouTube download before it is cancelled.",
+    )
+    youtube_cookies_file: Path | None = Field(
+        default=None,
+        description="Optional Netscape cookies file for YouTube bot-checks.",
+    )
+    youtube_proxy: str | None = Field(
+        default=None,
+        description="Optional HTTP/SOCKS proxy for yt-dlp (datacenter IP blocks).",
     )
 
     billing_enforced: bool = Field(

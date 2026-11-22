@@ -8,7 +8,6 @@ import tempfile
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from urllib.parse import urlparse
 
 import httpx
 from sqlalchemy import select
@@ -27,7 +26,7 @@ from snipzo.transcribe.base import Transcriber
 
 log = logging.getLogger(__name__)
 
-BLOCKED_URL_HOSTS = ("youtube.com", "youtu.be", "tiktok.com", "instagram.com")
+# TikTok/Instagram page links stay blocked; YouTube video URLs are handled by yt-dlp.
 
 # Tests replace this to avoid loading Whisper models.
 TranscriberFactory = Callable[[Settings], Transcriber | None]
@@ -43,18 +42,17 @@ def blob_store() -> BlobStore:
     return get_blob_store(get_api_settings())
 
 
+def classify_source_url(url: str) -> tuple[str, str]:
+    """Return ``("youtube", canonical)`` or ``("url", direct_file_url)``."""
+    from snipzo.youtube_url import classify_source_url as _classify
+
+    return _classify(url)
+
+
 def validate_source_url(url: str) -> str:
-    """Accept direct http(s) video file links; reject platform pages we cannot use."""
-    parsed = urlparse(url.strip())
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        raise SnipzoError("Source URL must be an http(s) link to a video file.")
-    host = parsed.netloc.lower().split(":", 1)[0]
-    if any(host == item or host.endswith("." + item) for item in BLOCKED_URL_HOSTS):
-        raise SnipzoError(
-            "Links to YouTube, TikTok, or Instagram pages are not supported. "
-            "Upload the file, or connect your own YouTube channel to import."
-        )
-    return url.strip()
+    """Accept a YouTube video URL or a direct http(s) file link."""
+    _kind, normalised = classify_source_url(url)
+    return normalised
 
 
 def download_url(url: str, dest: Path, *, max_bytes: int) -> Path:
@@ -151,12 +149,41 @@ def run_ingest_and_transcribe(job_id: str) -> bool:
         try:
             local = scratch / Path(filename).name
             if kind == "youtube":
-                from snipzo.api.publishing import download_owned_video
+                from snipzo.api import billing as billing_mod
+                from snipzo.api.ytdlp import download_youtube, probe_youtube
 
                 if not url:
                     raise SnipzoError("Project has no YouTube video.")
+                if api_settings.youtube_import_downloader == "disabled":
+                    raise SnipzoError(
+                        "YouTube import is turned off on this server. "
+                        "Upload the file instead."
+                    )
+                info = probe_youtube(url)
+                with session_scope() as session:
+                    row = session.get(ProjectRow, project_id)
+                    if row is not None:
+                        row.source_title = row.source_title or info.title
+                        row.source_thumbnail_url = (
+                            row.source_thumbnail_url or info.thumbnail_url
+                        )
+                        if info.duration:
+                            row.duration_seconds = info.duration
+                        owner = session.get(User, row.user_id)
+                        if owner is not None and info.duration:
+                            billing_mod.check_minutes(
+                                session,
+                                owner,
+                                api_settings,
+                                info.duration / 60.0,
+                            )
                 local = local.with_suffix(".mp4")
-                download_owned_video(url, local)
+                download_youtube(
+                    url,
+                    local,
+                    max_bytes=api_settings.max_upload_mb * 2**20,
+                    timeout=api_settings.youtube_download_timeout,
+                )
                 key = source_key(project_id, local.name)
                 store.put_file(key, local)
                 with session_scope() as session:

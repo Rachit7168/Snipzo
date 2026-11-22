@@ -55,10 +55,32 @@ export default function ProjectPage() {
           <Link href="/" className="text-sm text-neutral-400 hover:text-white">
             ← Projects
           </Link>
-          <h1 className="text-2xl font-bold">{project.title || project.source_filename}</h1>
-          <p className="text-sm text-neutral-500">
-            {project.source_filename} · {formatSeconds(project.duration_seconds)}
-          </p>
+          <div className="flex items-start gap-3">
+            {project.source_thumbnail_url && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={project.source_thumbnail_url}
+                alt={project.source_title || project.title || "Source video"}
+                className="h-16 w-28 shrink-0 rounded-md object-cover bg-neutral-800"
+              />
+            )}
+            <div>
+              <h1 className="text-2xl font-bold">{project.title || project.source_filename}</h1>
+              <p className="text-sm text-neutral-500">
+                {project.source_title || project.source_filename} · {formatSeconds(project.duration_seconds)}
+              </p>
+              {project.source_page_url && (
+                <a
+                  href={project.source_page_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs text-neutral-400 hover:text-white"
+                >
+                  Open source on YouTube
+                </a>
+              )}
+            </div>
+          </div>
         </div>
         <StatusBadge status={project.status} />
       </div>
