@@ -1,6 +1,6 @@
-# Local development stack: API, Celery worker + beat, Postgres, and Redis.
+# Local development stack: web, API, Celery worker + beat, Postgres, and Redis.
 #   docker compose up --build
-# API: http://localhost:8000/docs
+# Web: http://localhost:3000   API: http://localhost:8000/docs
 x-snipzo-env: &snipzo-env
   SNIPZO_DATABASE_URL: postgresql+psycopg://snipzo:snipzo@postgres:5432/snipzo
   SNIPZO_REDIS_URL: redis://redis:6379/0
@@ -72,6 +72,20 @@ services:
     <<: *snipzo-app
     entrypoint: ["celery"]
     command: ["-A", "snipzo.api.worker", "beat", "--loglevel=INFO", "-s", "/data/celerybeat-schedule"]
+
+  web:
+    build:
+      context: ./web
+      args:
+        NEXT_PUBLIC_API_URL: ${SNIPZO_PUBLIC_API_URL:-http://localhost:8000}
+    environment:
+      SNIPZO_API_URL: http://api:8000
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-dev-insecure-change-me}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
 
 volumes:
   pg-data:

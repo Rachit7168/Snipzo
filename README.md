@@ -180,6 +180,22 @@ Jobs run in two Celery tasks: `snipzo.ingest_transcribe` on the `gpu` queue (Whi
 
 Storage: set `SNIPZO_STORAGE_BACKEND=s3`, `SNIPZO_S3_BUCKET`, `SNIPZO_S3_ENDPOINT_URL` (for R2: `https://<account>.r2.cloudflarestorage.com`), and the access keys. Source videos are deleted after `SNIPZO_SOURCE_RETENTION_DAYS` (default 14, max 30) by the `snipzo.cleanup_sources` beat task; you can also add a matching bucket lifecycle rule on the `sources/` prefix.
 
+## Web app
+
+`web/` is a Next.js + Tailwind app with email/password sign-in (Auth.js / NextAuth credentials provider backed by the API's `/auth/login`). Signed-in users can upload a file or paste a direct video URL (with the "I own or have rights to this content" checkbox), watch job progress by stage, preview each Short with its score and reason, and download the MP4.
+
+```bash
+# Terminal 1: API (jobs inline, no Redis needed)
+SNIPZO_CELERY_EAGER=true uvicorn snipzo.api.app:app --port 8000
+# Terminal 2: web
+cd web
+cp .env.example .env.local   # set NEXTAUTH_SECRET (openssl rand -base64 32)
+npm install
+npm run dev                  # http://localhost:3000
+```
+
+Env vars: `NEXT_PUBLIC_API_URL` (browser → API), `SNIPZO_API_URL` (server → API, defaults to the public URL), `NEXTAUTH_URL`, `NEXTAUTH_SECRET`. With Docker, `docker compose up --build` also starts the web app on port 3000.
+
 ## Project layout
 
 ```
@@ -195,6 +211,7 @@ src/snipzo/
   pipeline.py     # Step 8: snipzo run (resumable)
   eval/           # Step 8: ratings CSV harness
   api/            # Step 9: FastAPI app, Celery worker, DB models, blob storage
+web/              # Step 10: Next.js app (sign-in, upload, progress, preview, download)
 ```
 
 PRs should target the `dev` branch, not `main`.
