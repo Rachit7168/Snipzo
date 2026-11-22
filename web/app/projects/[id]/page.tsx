@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 
 import ClipCard from "@/components/ClipCard";
+import PipelineProgress from "@/components/PipelineProgress";
 import PublishPanel from "@/components/PublishPanel";
 import StatusBadge from "@/components/StatusBadge";
 import { useToast } from "@/components/Toast";
@@ -13,12 +14,11 @@ import {
   Alert,
   Button,
   buttonClasses,
-  Card,
   CardGridSkeleton,
   Modal,
   Skeleton,
 } from "@/components/ui";
-import { apiFetch, formatSeconds, STAGES, type Project } from "@/lib/api";
+import { apiFetch, formatSeconds, type Project } from "@/lib/api";
 import { mapApiError, sanitizeJobErrorText } from "@/lib/errors";
 
 const DONE = new Set(["complete", "failed"]);
@@ -102,7 +102,6 @@ export default function ProjectPage() {
   }
 
   const job = project.job;
-  const stageIndex = job?.stage ? STAGES.indexOf(job.stage) : -1;
   const running = job && !["succeeded", "failed"].includes(job.status);
   const failed = project.status === "failed" || job?.status === "failed";
   const friendlyFailure = failed ? sanitizeJobErrorText(job?.error || project.error) : null;
@@ -153,34 +152,7 @@ export default function ProjectPage() {
       </div>
 
       {job && running && (
-        <Card className="space-y-3">
-          <div className="flex justify-between text-sm">
-            <span className="text-ink">{job.message || "Queued..."}</span>
-            <span className="font-medium text-ink-muted">{Math.round(job.progress * 100)}%</span>
-          </div>
-          <div className="h-2 overflow-hidden rounded-full bg-surface-muted">
-            <div
-              className="h-full bg-brand transition-all"
-              style={{ width: `${Math.round(job.progress * 100)}%` }}
-            />
-          </div>
-          <ol className="grid grid-cols-3 gap-2 text-xs sm:grid-cols-6">
-            {STAGES.map((stage, index) => (
-              <li
-                key={stage}
-                className={`rounded-md px-2 py-1 text-center font-medium ${
-                  index < stageIndex || job.status === "succeeded"
-                    ? "bg-emerald-500/15 text-emerald-300"
-                    : index === stageIndex
-                      ? "bg-brand-subtle text-brand-text"
-                      : "bg-surface-muted text-ink-subtle"
-                }`}
-              >
-                {stage}
-              </li>
-            ))}
-          </ol>
-        </Card>
+        <PipelineProgress job={job} durationSeconds={project.duration_seconds} />
       )}
 
       {failed && friendlyFailure && (
