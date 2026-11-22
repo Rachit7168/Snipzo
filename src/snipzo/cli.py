@@ -399,3 +399,21 @@ def eval_summary_cmd(
         f"{stats['clips']} clip rows total."
     )
 
+
+
+db_app = typer.Typer(help="Database migrations for the API (needs the `api` extra).")
+app.add_typer(db_app, name="db")
+
+
+@db_app.command("upgrade")
+def db_upgrade(
+    revision: Annotated[str, typer.Argument(help="Target revision.")] = "head",
+) -> None:
+    """Apply Alembic migrations to SNIPZO_DATABASE_URL."""
+    try:
+        from snipzo.api.migrate import upgrade
+    except ImportError as exc:  # pragma: no cover - depends on extras
+        typer.secho("Install the api extra: pip install -e '.[api]'", err=True)
+        raise typer.Exit(code=1) from exc
+    upgrade(revision=revision)
+    typer.echo(f"Database upgraded to {revision}.")

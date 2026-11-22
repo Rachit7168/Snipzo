@@ -1,0 +1,78 @@
+# Local development stack: API, Celery worker + beat, Postgres, and Redis.
+#   docker compose up --build
+# API: http://localhost:8000/docs
+x-snipzo-env: &snipzo-env
+  SNIPZO_DATABASE_URL: postgresql+psycopg://snipzo:snipzo@postgres:5432/snipzo
+  SNIPZO_REDIS_URL: redis://redis:6379/0
+  SNIPZO_WORK_DIR: /data/work
+  SNIPZO_STORAGE_BACKEND: ${SNIPZO_STORAGE_BACKEND:-local}
+  SNIPZO_STORAGE_DIR: /data/blobs
+  SNIPZO_S3_BUCKET: ${SNIPZO_S3_BUCKET:-}
+  SNIPZO_S3_ENDPOINT_URL: ${SNIPZO_S3_ENDPOINT_URL:-}
+  SNIPZO_S3_ACCESS_KEY_ID: ${SNIPZO_S3_ACCESS_KEY_ID:-}
+  SNIPZO_S3_SECRET_ACCESS_KEY: ${SNIPZO_S3_SECRET_ACCESS_KEY:-}
+  SNIPZO_SECRET_KEY: ${SNIPZO_SECRET_KEY:-dev-insecure-change-me}
+  SNIPZO_PUBLIC_API_URL: ${SNIPZO_PUBLIC_API_URL:-http://localhost:8000}
+  SNIPZO_CORS_ORIGINS: ${SNIPZO_CORS_ORIGINS:-http://localhost:3000}
+  SNIPZO_ANTHROPIC_API_KEY: ${SNIPZO_ANTHROPIC_API_KEY:-}
+  SNIPZO_WHISPER_MODEL: ${SNIPZO_WHISPER_MODEL:-base}
+
+x-snipzo-app: &snipzo-app
+  build:
+    context: .
+    args:
+      SNIPZO_EXTRAS: api,pipeline
+  image: snipzo:dev
+  environment: *snipzo-env
+  volumes:
+    - snipzo-data:/data
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: snipzo
+      POSTGRES_PASSWORD: snipzo
+      POSTGRES_DB: snipzo
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U snipzo"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    <<: *snipzo-app
+    entrypoint: ["sh", "-c"]
+    command:
+      - snipzo db upgrade && uvicorn snipzo.api.app:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+
+  worker:
+    <<: *snipzo-app
+    entrypoint: ["celery"]
+    command: ["-A", "snipzo.api.worker", "worker", "-Q", "gpu,cpu", "-c", "2", "--loglevel=INFO"]
+
+  beat:
+    <<: *snipzo-app
+    entrypoint: ["celery"]
+    command: ["-A", "snipzo.api.worker", "beat", "--loglevel=INFO", "-s", "/data/celerybeat-schedule"]
+
+volumes:
+  pg-data:
+  snipzo-data:
