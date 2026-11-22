@@ -62,6 +62,12 @@ def sanitize_job_error(exc: Exception) -> str:
             "Upload the video file instead."
         )
 
+    if "llm metadata is required" in lower or "llm clip scoring is required" in lower:
+        return (
+            "AI title generation is temporarily unavailable on this server. "
+            "Please try again shortly."
+        )
+
     if "no audio stream" in lower:
         return NO_AUDIO_ERROR
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from snipzo.config import Settings
 from snipzo.errors import SnipzoError
 from snipzo.metadata.generate import (
@@ -16,13 +18,26 @@ from snipzo.projects import get_storage, resolve_project
 from snipzo.storage import Storage
 from snipzo.transcribe.service import load_transcript
 
+log = logging.getLogger(__name__)
+
 
 def get_generator(settings: Settings) -> MetadataGenerator:
-    """Return Claude when an API key is configured, otherwise the heuristic."""
-    if settings.anthropic_api_key:
-        return ClaudeMetadataGenerator(
-            settings.anthropic_api_key, model=settings.anthropic_model
+    """Return Claude when an API key is configured, otherwise the heuristic.
+
+    Raises ``SnipzoError`` when ``settings.require_llm_metadata`` is enabled
+    and ``settings.anthropic_api_key`` is missing.
+    """
+    api_key = (settings.anthropic_api_key or "").strip()
+    if api_key:
+        return ClaudeMetadataGenerator(api_key, model=settings.anthropic_model)
+    if settings.require_llm_metadata:
+        raise SnipzoError(
+            "LLM metadata is required (SNIPZO_REQUIRE_LLM_METADATA=true) "
+            "but SNIPZO_ANTHROPIC_API_KEY is not set."
         )
+    log.warning(
+        "SNIPZO_ANTHROPIC_API_KEY is not set; using heuristic metadata generator."
+    )
     return HeuristicMetadataGenerator()
 
 
@@ -48,9 +63,14 @@ def generate_metadata(
     for clip in clipset.clips:
         try:
             meta = used.generate(clip, transcript, project.language)
-        except SnipzoError:
-            if generator is not None:
+        except SnipzoError as exc:
+            if generator is not None or settings.require_llm_metadata:
                 raise
+            log.warning(
+                "Claude metadata failed for %s (%s); falling back to heuristic.",
+                clip.id,
+                exc,
+            )
             meta = HeuristicMetadataGenerator().generate(
                 clip, transcript, project.language
             )

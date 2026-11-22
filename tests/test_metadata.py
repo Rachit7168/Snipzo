@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from snipzo.cli import app
@@ -191,3 +192,108 @@ def test_metadata_cli(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.stdout + result.stderr
     assert "Wrote metadata for 1 clips" in result.stdout
     assert (settings.work_dir / project.id / "renders" / "clip-01.json").is_file()
+
+
+def test_voa_filler_transcript_produces_clean_title_and_hashtags() -> None:
+    clip = Clip(id="clip-01", start=0.0, end=45.0, score=0.7, reason="hook")
+    spoken = (
+        "you know, like coming again and stuff like this. And so I said, like, "
+        "if there's any chance, I can help him. Yeah, that was my motivation. "
+        "So what do you see your foundation in Sierra Leone in five years? "
+        "At the end of the day, like, you never know what happens. "
+        "Because my personal goal is definitely education and infrastructure."
+    )
+    words = [
+        Word(text=tok, start=idx * 0.4, end=idx * 0.4 + 0.35)
+        for idx, tok in enumerate(spoken.split())
+    ]
+    transcript = Transcript(language="en", duration=45.0, words=words)
+    meta = HeuristicMetadataGenerator().generate(clip, transcript, "en")
+
+    lower_title = meta.title.lower()
+    assert not lower_title.startswith("you know")
+    assert "stuff like" not in lower_title
+    assert meta.hook_title is not None
+    assert not meta.hook_title.lower().startswith("you know")
+    assert meta.hashtags[0] == "#Shorts"
+
+    forbidden = {
+        "#like",
+        "#know",
+        "#what",
+        "#day",
+        "#end",
+        "#never",
+        "#that's",
+        "#thats",
+        "#i'm",
+        "#im",
+        "#want",
+        "#because",
+        "#stuff",
+    }
+    assert not (forbidden & {tag.lower() for tag in meta.hashtags}), meta.hashtags
+
+
+def test_ramble_without_clean_sentence_uses_keyphrase_headline() -> None:
+    clip = Clip(id="clip-02", start=0.0, end=25.0, score=0.5, reason="topic")
+    spoken = (
+        "Education is more like it takes a long time to be honest. "
+        "That's, that's not from today to tomorrow. "
+        "But what I want to really achieve very early is the infrastructure. "
+        "Because we all know you're African too. So"
+    )
+    words = [
+        Word(text=tok, start=idx * 0.4, end=idx * 0.4 + 0.35)
+        for idx, tok in enumerate(spoken.split())
+    ]
+    transcript = Transcript(language="en", duration=25.0, words=words)
+    meta = HeuristicMetadataGenerator().generate(clip, transcript, "en")
+
+    assert "more like" not in meta.title.lower()
+    assert "takes a long" not in meta.title.lower()
+    assert any(
+        term in meta.title.lower()
+        for term in ("infrastructure", "education", "african")
+    )
+    tags_lower = {tag.lower() for tag in meta.hashtags}
+    assert "#like" not in tags_lower
+    assert "#because" not in tags_lower
+    assert "#want" not in tags_lower
+    assert "#that's" not in tags_lower
+
+
+def test_require_llm_metadata_fails_loudly_without_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from snipzo.errors import SnipzoError
+    from snipzo.metadata.service import get_generator
+    from snipzo.pick.service import get_scorer
+
+    strict = Settings(
+        work_dir=tmp_path / "data",
+        anthropic_api_key=None,
+        require_llm_metadata=True,
+        _env_file=None,
+    )
+    with pytest.raises(SnipzoError, match="SNIPZO_ANTHROPIC_API_KEY"):
+        get_generator(strict)
+    with pytest.raises(SnipzoError, match="SNIPZO_ANTHROPIC_API_KEY"):
+        get_scorer(strict)
+
+    project, _ = _project(tmp_path)
+    with pytest.raises(SnipzoError, match="SNIPZO_ANTHROPIC_API_KEY"):
+        generate_metadata(project.id, strict)
+
+    # When API key is set, Claude generator is selected cleanly.
+    with_key = Settings(
+        work_dir=tmp_path / "data",
+        anthropic_api_key="sk-ant-test-key",
+        require_llm_metadata=True,
+        _env_file=None,
+    )
+    gen = get_generator(with_key)
+    assert gen.name == "claude"
+    scorer = get_scorer(with_key)
+    assert scorer.name == "claude"
+    monkeypatch.undo()
