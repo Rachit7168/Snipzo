@@ -37,6 +37,12 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255))
     name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     plan: Mapped[str] = mapped_column(String(32), default="free")
+    stripe_customer_id: Mapped[str | None] = mapped_column(
+        String(128), nullable=True, index=True
+    )
+    stripe_subscription_id: Mapped[str | None] = mapped_column(
+        String(128), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
     projects: Mapped[list[ProjectRow]] = relationship(back_populates="user")
@@ -215,4 +221,32 @@ class TakedownRequest(Base):
     original_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     details: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(32), default="received")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class UsageEvent(Base):
+    """Metered processing usage (minutes per project) for monthly plan limits."""
+
+    __tablename__ = "usage_events"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    project_id: Mapped[str | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="SET NULL"), nullable=True
+    )
+    kind: Mapped[str] = mapped_column(String(32), default="video")
+    minutes: Mapped[float] = mapped_column(Float, default=0.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class BillingEvent(Base):
+    """Processed Stripe webhook event ids for idempotency."""
+
+    __tablename__ = "billing_events"
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    type: Mapped[str] = mapped_column(String(128))
+    user_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

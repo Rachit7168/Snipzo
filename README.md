@@ -219,6 +219,16 @@ API: `GET /projects/{id}/clips/{clip_id}/editor` and `PATCH /projects/{id}/clips
 
 Tests mock every Google call; no real credentials are needed to run them.
 
+## Billing and usage limits
+
+Plans and monthly limits are enforced by default (`SNIPZO_BILLING_ENFORCED=true`, set `false` to bypass locally):
+
+- **Free** ($0/mo): `SNIPZO_FREE_VIDEOS_PER_MONTH` (default 3) videos and `SNIPZO_FREE_MINUTES_PER_MONTH` (default 30) source minutes/month, 720×1280 exports with a `Made with Snipzo` watermark.
+- **Creator** ($19/mo): 30 videos / 600 minutes/month, 1080×1920, no watermark.
+- **Pro** ($49/mo): 100 videos / 3000 minutes/month, 1080×1920, no watermark.
+
+Stripe setup: create Creator and Pro recurring prices in Stripe, set `SNIPZO_STRIPE_SECRET_KEY`, `SNIPZO_STRIPE_WEBHOOK_SECRET`, `SNIPZO_STRIPE_PRICE_CREATOR`, and `SNIPZO_STRIPE_PRICE_PRO`, and point a webhook at `POST /billing/webhook` (listening for `checkout.session.completed`, `customer.subscription.created/updated/deleted`). The `/billing` page in the web app shows current usage and links to Stripe Checkout and the Customer Portal.
+
 ## Project layout
 
 ```

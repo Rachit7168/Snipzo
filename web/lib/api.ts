@@ -163,3 +163,24 @@ export type Publication = {
   error: string | null;
   created_at: string;
 };
+
+export type PlanInfo = {
+  id: string;
+  name: string;
+  price_usd: number;
+  videos_per_month: number;
+  minutes_per_month: number;
+  max_resolution: string;
+  watermark: boolean;
+  features: string[];
+  purchasable: boolean;
+};
+
+export type BillingUsage = {
+  plan: PlanInfo;
+  videos_used: number;
+  minutes_used: number;
+  period_start: string;
+  billing_configured: boolean;
+  has_subscription: boolean;
+};
